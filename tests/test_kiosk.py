@@ -1,6 +1,8 @@
 """Pengujian Tahap 4B: layanan kamera kios dan halaman kios."""
 from datetime import datetime
 
+import os
+
 import pytest
 
 from camera.webcam import CameraError
@@ -336,3 +338,87 @@ def _safe(fn, stop, errors):
         fn(should_stop=stop)
     except Exception as exc:  # pragma: no cover - hanya untuk melaporkan
         errors.append(exc)
+
+
+# ---------------------------------------------------------------- perilaku Windows
+
+def _denied(times):
+    """os.replace tiruan yang ditolak `times` kali seperti di Windows (WinError 5)."""
+    state = {"left": times}
+
+    def replace(src, dst):
+        if state["left"] > 0:
+            state["left"] -= 1
+            raise PermissionError(13, "Access is denied")
+        os.replace(src, dst)
+
+    return replace
+
+
+def test_penulisan_status_dicoba_ulang_saat_file_sedang_dibaca(tmp_path):
+    """Bug Windows: os.replace ditolak saat server web membaca file status."""
+    store = ks.KioskState(tmp_path / "s.json", sleep=lambda s: None, replace=_denied(2))
+    assert store.publish({"camera": "ok"}) is True
+    assert store.read()["camera"] == "ok"
+
+
+def test_penulisan_status_dilewati_tanpa_galat_jika_terus_ditolak(tmp_path):
+    store = ks.KioskState(tmp_path / "s.json", sleep=lambda s: None, replace=_denied(99))
+    assert store.publish({"camera": "ok"}) is False
+    assert not (tmp_path / "s.tmp").exists()
+
+
+def test_pembacaan_status_dicoba_ulang(tmp_path, monkeypatch):
+    path = tmp_path / "s.json"
+    ks.KioskState(path).publish({"camera": "ok"})
+    real_open = open
+    calls = {"n": 0}
+
+    def flaky_open(file, *a, **kw):
+        if str(file) == str(path) and calls["n"] < 2:
+            calls["n"] += 1
+            raise PermissionError(13, "Access is denied")
+        return real_open(file, *a, **kw)
+
+    monkeypatch.setattr("builtins.open", flaky_open)
+    assert ks.KioskState(path, sleep=lambda s: None).read()["camera"] == "ok"
+
+
+def test_layanan_kamera_tidak_mati_karena_status_gagal_ditulis(app, tmp_path, budi, frozen_record):
+    """Regresi: sebelumnya PermissionError dari os.replace menghentikan layanan."""
+    worker, record = make_worker(app, tmp_path, Cam(person_frame("budi", 2)))
+    frozen_record(record)
+    worker.state = ks.KioskState(tmp_path / "s.json", sleep=lambda s: None, replace=_denied(10_000))
+    counter = {"n": 0}
+
+    def stop():
+        counter["n"] += 1
+        return counter["n"] > 15
+
+    worker.run(should_stop=stop, idle_sleep=lambda s: None)
+    assert worker.recorded == 1          # absensi tetap tercatat
+    assert worker.publish_skipped > 0    # pembaruan status dilewati, bukan mati
+
+
+def test_layanan_kamera_lanjut_setelah_galat_tak_terduga(app, tmp_path, budi, frozen_record):
+    worker, record = make_worker(app, tmp_path, Cam(person_frame("budi", 2)))
+    frozen_record(record)
+    real_step = worker.step
+    calls = {"n": 0}
+
+    def flaky_step(frame):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("galat simulasi")
+        return real_step(frame)
+
+    worker.step = flaky_step
+    counter = {"n": 0}
+
+    def stop():
+        counter["n"] += 1
+        return counter["n"] > 15
+
+    worker.run(should_stop=stop, idle_sleep=lambda s: None)
+    assert worker.unexpected_errors == 1
+    assert worker.recorded == 1

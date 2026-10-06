@@ -68,6 +68,8 @@ class KioskWorker:
         self.message = None
         self.hint = None
         self.recorded = 0
+        self.publish_skipped = 0
+        self.unexpected_errors = 0
         self.decisions = []  # riwayat singkat untuk pengujian dan log
 
     # ------------------------------------------------------------ pembantu
@@ -99,7 +101,7 @@ class KioskWorker:
         if not force and now - self._last_publish < 0.5:
             return
         self._last_publish = now
-        self.state.publish({
+        ok = self.state.publish({
             "camera": self.camera_status,
             "detail": self.detail,
             "message": self.message,
@@ -108,6 +110,9 @@ class KioskWorker:
             "recorded": self.recorded,
             "liveness": False,  # FR-11 belum aktif (Tahap 4D)
         }, clock=self.wall_clock)
+        if not ok:
+            self.publish_skipped += 1
+            log.warning("Pembaruan status kios dilewati (file sedang dipakai proses lain).")
 
     # ------------------------------------------------------------ satu langkah
 
@@ -194,11 +199,24 @@ class KioskWorker:
                 self.reload_templates(force=True)
                 self.publish(force=True)
                 while not should_stop():
-                    if self.run_once() is False:
-                        break
+                    try:
+                        if self.run_once() is False:
+                            break
+                    except Exception:
+                        # Layanan absensi tidak boleh mati karena satu galat tak
+                        # terduga. Setiap pencatatan absensi berjalan dalam
+                        # transaksinya sendiri, jadi melanjutkan tetap aman.
+                        self.unexpected_errors += 1
+                        log.exception("Galat tak terduga di layanan kamera; dilanjutkan.")
+                        db.session.rollback()
+                        idle_sleep(1.0)
+                        continue
                     if self.camera_status == ks.CAMERA_ERROR:
                         idle_sleep(0.5)
             finally:
                 self.camera_status = "stopped"
-                self.publish(force=True)
+                try:
+                    self.publish(force=True)
+                except Exception:
+                    log.exception("Status akhir kios tidak dapat ditulis.")
                 db.session.remove()

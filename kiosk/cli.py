@@ -35,6 +35,8 @@ def register_kiosk_commands(app):
         from tracking.face_tracker import TrackerSettings
 
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+        # Pesan teknis pustaka pembaca nama kamera tidak perlu tampil.
+        logging.getLogger("comtypes").setLevel(logging.WARNING)
 
         lock = SingleInstanceLock(app.config["KIOSK_LOCK_FILE"])
         try:
