@@ -72,6 +72,16 @@ class Config:
     FACE_MIN_SIZE = int(os.getenv("FACE_MIN_SIZE", "80"))
     FACE_MIN_SHARPNESS = float(os.getenv("FACE_MIN_SHARPNESS", "40"))
 
+    # Pencocokan identitas (Tahap 3C). Ambang 0.363 berasal dari kode contoh
+    # resmi OpenCV untuk SFace; SEMENTARA, wajib dikalibrasi (PRD 13.2).
+    FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.363"))
+    FACE_MATCH_MARGIN = float(os.getenv("FACE_MATCH_MARGIN", "0.05"))
+    # Pelacakan: identitas dipastikan jika cocok TRACK_CONFIRM_VOTES kali dari
+    # TRACK_WINDOW hasil terakhir pada jejak yang sama.
+    TRACK_WINDOW = int(os.getenv("TRACK_WINDOW", "5"))
+    TRACK_CONFIRM_VOTES = int(os.getenv("TRACK_CONFIRM_VOTES", "3"))
+    IDENTITY_COOLDOWN_SECONDS = float(os.getenv("IDENTITY_COOLDOWN_SECONDS", "30"))
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 

@@ -280,6 +280,79 @@ def save_template(employee, embedding, model_name, actor_id):
     return template
 
 
+def save_enrollment(employee, embeddings, model_name, actor_id, replace_reason=None):
+    """Menyimpan beberapa sampel wajah sekaligus dalam SATU transaksi (FR-03).
+
+    Jika replace_reason diisi, templat lama dicabut di transaksi yang sama,
+    sehingga tidak pernah ada keadaan setengah jadi (lama sudah hilang tetapi
+    yang baru gagal tersimpan).
+    """
+    model_name = (model_name or "").strip()
+    if not model_name or len(model_name) > 100:
+        raise ValidationError({"model_name": "Nama model wajib diisi (maks. 100 karakter)."})
+    if not employee.is_active:
+        raise ValidationError({"_": "Templat hanya dapat didaftarkan untuk karyawan aktif."})
+    if not embeddings:
+        raise ValidationError({"_": "Tidak ada sampel wajah untuk disimpan."})
+
+    existing = templates_for(employee)
+    if existing and not replace_reason:
+        raise ValidationError({
+            "_": (
+                f"Karyawan {employee.employee_code} sudah memiliki {len(existing)} templat. "
+                "Gunakan opsi ganti (--replace) dengan alasan untuk mendaftarkan ulang."
+            )
+        })
+    if len(embeddings) > MAX_TEMPLATES_PER_EMPLOYEE:
+        raise ValidationError({
+            "_": f"Maksimal {MAX_TEMPLATES_PER_EMPLOYEE} sampel per karyawan."
+        })
+
+    keyring = load_keyring()
+    try:
+        if existing:
+            for template in existing:
+                db.session.delete(template)
+            audit.log_event(
+                audit.FACE_TEMPLATE_REVOKED,
+                user_id=actor_id,
+                entity_type="employee",
+                entity_id=employee.id,
+                description=(
+                    f"{len(existing)} templat wajah {employee.employee_code} diganti "
+                    f"melalui pendaftaran ulang. Alasan: {replace_reason}"
+                ),
+                commit=False,
+            )
+        saved = []
+        for embedding in embeddings:
+            blob, key_version = encrypt_embedding(embedding, employee.id, model_name, keyring)
+            template = FaceTemplate(
+                employee_id=employee.id,
+                encrypted_embedding=blob,
+                encryption_key_version=key_version,
+                model_name=model_name,
+            )
+            db.session.add(template)
+            saved.append(template)
+        audit.log_event(
+            audit.FACE_TEMPLATE_CREATED,
+            user_id=actor_id,
+            entity_type="employee",
+            entity_id=employee.id,
+            description=(
+                f"{len(saved)} templat wajah didaftarkan untuk {employee.employee_code} "
+                f"(model {model_name}, kunci v{keyring[0]})"
+            ),
+            commit=False,
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return saved
+
+
 def revoke_templates(employee, actor_id, reason):
     """Menghapus permanen SEMUA templat wajah seorang karyawan (FR-03, PRD 9.2).
 

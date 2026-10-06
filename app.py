@@ -18,10 +18,8 @@ Pemeriksaan kamera:
     flask --app app camera-scan           (mencari webcam yang terpasang)
     flask --app app camera-check          (uji stabilitas dan pencahayaan)
 
-Model AI dan deteksi wajah:
-    flask --app app models-download       (unduh model YuNet dan SFace)
-    flask --app app models-check          (periksa keaslian file model)
-    flask --app app face-check            (uji deteksi wajah langsung)
+Model AI dan pengenalan wajah: lihat recognition/cli.py
+    (models-download, models-check, face-check, face-enroll, face-identify)
 """
 import re
 
@@ -40,6 +38,7 @@ from routes.employees import bp as employees_bp
 from routes.schedules import bp as schedules_bp
 from services import audit_service as audit
 from services import biometric_service as biometric
+from recognition.cli import register_recognition_commands
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,50}$")
 MIN_PASSWORD_LENGTH = 10
@@ -344,122 +343,6 @@ def register_commands(app):
         else:
             click.secho("Kamera stabil dan siap untuk tahap deteksi wajah.", fg="green")
 
-    @app.cli.command("models-download")
-    def models_download():
-        """Mengunduh model YuNet dan SFace lalu memverifikasi sidik jarinya."""
-        from recognition import model_files as mf
-
-        model_dir = app.config["MODEL_DIR"]
-        for model in mf.ALL_MODELS:
-            try:
-                mf.verify(model_dir, model)
-                click.echo(f"{model.filename}: sudah ada dan asli, dilewati.")
-                continue
-            except mf.ModelFileError:
-                pass
-            click.echo(f"Mengunduh {model.filename} ({model.size / 1e6:.1f} MB, lisensi {model.license})...")
-            try:
-                path = mf.download(model_dir, model)
-            except mf.ModelFileError as exc:
-                raise click.ClickException(str(exc))
-            click.echo(f"  Tersimpan dan terverifikasi: {path}")
-        click.secho("Semua model siap.", fg="green")
-
-    @app.cli.command("models-check")
-    def models_check():
-        """Memeriksa bahwa file model ada dan sidik jarinya cocok dengan versi resmi."""
-        from recognition import model_files as mf
-
-        failed = False
-        for model in mf.ALL_MODELS:
-            try:
-                path = mf.verify(app.config["MODEL_DIR"], model)
-                click.echo(f"OK     {model.filename} ({model.license}) {path}")
-            except mf.ModelFileError as exc:
-                failed = True
-                click.echo(f"GAGAL  {exc}")
-        if failed:
-            raise click.ClickException("Ada model yang belum siap.")
-
-    @app.cli.command("face-check")
-    @click.option("--seconds", default=20, show_default=True, help="Lama pengujian.")
-    @click.option("--preview/--no-preview", default=True, show_default=True)
-    def face_check(seconds, preview):
-        """Uji deteksi wajah dan kualitas wajah langsung dari kamera.
-
-        Tidak mencatat absensi dan tidak menyimpan gambar.
-        """
-        import cv2
-
-        from camera import webcam
-        from recognition import face_check as fc
-        from recognition import model_files as mf
-        from recognition.detector import QualitySettings, YuNetDetector
-        from recognition.embedder import SFaceEmbedder
-
-        try:
-            yunet = mf.verify(app.config["MODEL_DIR"], mf.YUNET)
-            sface = mf.verify(app.config["MODEL_DIR"], mf.SFACE)
-        except mf.ModelFileError as exc:
-            raise click.ClickException(str(exc))
-
-        detector = YuNetDetector(yunet, detect_width=app.config["FACE_DETECT_WIDTH"])
-        embedder = SFaceEmbedder(sface)
-        quality = QualitySettings.from_config(app.config)
-
-        settings = webcam.CameraSettings.from_config(app.config)
-        click.echo("Membuka kamera...")
-        try:
-            cam = webcam.Webcam(settings).open()
-        except webcam.CameraError as exc:
-            raise click.ClickException(str(exc))
-        a = cam.actual
-        click.echo(f"Kamera: {a.get('device_name') or 'indeks ' + str(a['index'])}, {a['width']}x{a['height']}")
-        click.echo(
-            f"Uji deteksi selama {seconds} detik. Coba berbagai jarak (0,5-2 m), "
-            "menoleh, dan berjalan melintas. Tekan Q untuk berhenti."
-        )
-
-        window = "Uji deteksi wajah - tekan Q untuk berhenti"
-
-        def show(frame, live):
-            header = [
-                f"{live['fps']:.1f} FPS  deteksi {live['detect_ms']:.0f} ms",
-                f"Wajah: {len(live['faces'])}",
-            ]
-            cv2.imshow(window, fc.annotate(frame, live["faces"], header))
-            key = cv2.waitKey(1) & 0xFF
-            if key in (ord("q"), ord("Q"), 27):
-                return False
-            return cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) >= 1
-
-        try:
-            stats = fc.run(cam, detector, embedder, quality, seconds=seconds,
-                           on_frame=show if preview else None)
-        except webcam.CameraError as exc:
-            raise click.ClickException(str(exc))
-        finally:
-            cam.release()
-            if preview:
-                cv2.destroyAllWindows()
-
-        pct = lambda n: f"{(100 * n / stats['frames']):.0f}%" if stats["frames"] else "0%"
-        click.echo("")
-        click.echo("Hasil uji deteksi wajah")
-        click.echo(f"  Frame diproses        : {stats['frames']} ({stats['fps']} FPS)")
-        click.echo(f"  Frame berisi wajah    : {stats['with_face']} ({pct(stats['with_face'])})")
-        click.echo(f"  Wajah layak dipakai   : {stats['good']} ({pct(stats['good'])})")
-        click.echo(f"  Waktu deteksi rata2   : {stats['detect_ms']} ms per frame")
-        click.echo(f"  Waktu embedding rata2 : {stats['embed_ms']} ms per wajah")
-        click.echo(f"  Ukuran wajah rata2    : {stats['face_size']} px (minimal {quality.min_size})")
-        click.echo(f"  Ketajaman wajah rata2 : {stats['face_sharpness']} (ambang {quality.min_sharpness}, "
-                   f"terendah {stats['min_sharpness_seen']})")
-        total_ms = stats["detect_ms"] + stats["embed_ms"]
-        click.echo(f"  Perkiraan waktu proses satu wajah: {total_ms:.0f} ms")
-        if stats["with_face"] == 0:
-            click.secho("Tidak ada wajah terdeteksi. Pastikan wajah menghadap kamera dan cukup terang.",
-                        fg="yellow")
-
 
 def create_app(config_name=None):
     app = Flask(__name__)
@@ -480,6 +363,7 @@ def create_app(config_name=None):
     app.register_blueprint(employees_bp)
     app.register_blueprint(schedules_bp)
     register_commands(app)
+    register_recognition_commands(app)
 
     @app.after_request
     def security_headers(response):
