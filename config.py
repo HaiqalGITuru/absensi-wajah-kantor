@@ -82,6 +82,12 @@ class Config:
     TRACK_CONFIRM_VOTES = int(os.getenv("TRACK_CONFIRM_VOTES", "3"))
     IDENTITY_COOLDOWN_SECONDS = float(os.getenv("IDENTITY_COOLDOWN_SECONDS", "30"))
 
+    # Aturan absensi (Tahap 4A). Lihat services/attendance_service.py.
+    CHECKIN_EARLY_MINUTES = int(os.getenv("CHECKIN_EARLY_MINUTES", "120"))
+    CHECKOUT_MIN_MINUTES = int(os.getenv("CHECKOUT_MIN_MINUTES", "240"))
+    CHECKOUT_GRACE_HOURS = int(os.getenv("CHECKOUT_GRACE_HOURS", "6"))
+    CHECKOUT_UPDATE_LATER = os.getenv("CHECKOUT_UPDATE_LATER", "true")
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 

@@ -179,14 +179,21 @@ class AttendanceSession(TimestampMixin, db.Model):
     """Sesi kerja yang menghubungkan check-in dan check-out (PRD 8.5).
 
     Batasan unik (employee_id, work_date) mencegah sesi ganda di level
-    database (BR-05). Jika nanti ada shift malam atau beberapa sesi per hari,
-    batasan ini diubah melalui migrasi di Tahap 4.
+    database (BR-05). Untuk shift lintas tengah malam, work_date adalah tanggal
+    MULAI shift, sehingga check-out setelah tengah malam tetap masuk sesi yang
+    sama (BR-10).
+
+    scheduled_start/scheduled_end adalah SALINAN jam jadwal saat check-in.
+    Perubahan jadwal di kemudian hari tidak mengubah penilaian catatan lama.
     """
 
     __tablename__ = "attendance_sessions"
     __table_args__ = (
         db.UniqueConstraint("employee_id", "work_date"),
     )
+
+    STATUS_ON_TIME = "hadir"
+    STATUS_LATE = "terlambat"
 
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(
@@ -200,8 +207,22 @@ class AttendanceSession(TimestampMixin, db.Model):
     check_out_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="open")
 
+    scheduled_start = db.Column(db.DateTime, nullable=True)
+    scheduled_end = db.Column(db.DateTime, nullable=True)
+    late_minutes = db.Column(db.Integer, nullable=True)
+    check_in_method = db.Column(db.String(20), nullable=True)   # kamera / admin
+    check_out_method = db.Column(db.String(20), nullable=True)
+    check_in_score = db.Column(db.Float, nullable=True)         # skor kecocokan wajah
+    check_out_score = db.Column(db.Float, nullable=True)
+
     employee = db.relationship("Employee", back_populates="attendance_sessions")
     work_schedule = db.relationship("WorkSchedule")
+
+    @property
+    def left_early(self):
+        return bool(
+            self.check_out_at and self.scheduled_end and self.check_out_at < self.scheduled_end
+        )
 
     def __repr__(self):
         return f"<AttendanceSession employee={self.employee_id} date={self.work_date}>"

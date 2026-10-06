@@ -18,6 +18,9 @@ Pemeriksaan kamera:
     flask --app app camera-scan           (mencari webcam yang terpasang)
     flask --app app camera-check          (uji stabilitas dan pencahayaan)
 
+Simulasi aturan absensi (tanpa menyimpan):
+    flask --app app attendance-simulate --employee KODE --at "2026-10-07 07:45"
+
 Model AI dan pengenalan wajah: lihat recognition/cli.py
     (models-download, models-check, face-check, face-enroll, face-identify)
 """
@@ -344,6 +347,48 @@ def register_commands(app):
             click.secho("Kamera stabil dan siap untuk tahap deteksi wajah.", fg="green")
 
 
+def register_attendance_commands(app):
+    @app.cli.command("attendance-simulate")
+    @click.option("--employee", "employee_code", required=True, help="Kode karyawan.")
+    @click.option("--at", "at_text", default=None,
+                  help='Waktu simulasi "YYYY-MM-DD HH:MM" (bawaan: sekarang).')
+    def attendance_simulate(employee_code, at_text):
+        """Menampilkan keputusan absensi untuk karyawan pada waktu tertentu.
+
+        Hanya simulasi: TIDAK ada data yang disimpan.
+        """
+        from datetime import datetime as _datetime
+
+        from services import attendance_service as att
+
+        code = employee_code.strip().upper()
+        employee = db.session.execute(
+            db.select(models.Employee).filter_by(employee_code=code)
+        ).scalar_one_or_none()
+        if employee is None:
+            raise click.ClickException(f"Karyawan {code} tidak ditemukan.")
+        if at_text:
+            try:
+                now = _datetime.strptime(at_text.strip(), "%Y-%m-%d %H:%M")
+            except ValueError:
+                raise click.ClickException('Format --at harus "YYYY-MM-DD HH:MM".')
+        else:
+            now = office_now().replace(second=0, microsecond=0)
+
+        decision = att.record(
+            employee.id, now=now, settings=att.AttendanceSettings.from_config(app.config),
+            dry_run=True,
+        )
+        day = models.WEEKDAY_NAMES[now.weekday()]
+        click.echo(f"Simulasi {code} pada {day} {now:%d-%m-%Y %H:%M} (tidak disimpan)")
+        click.echo(f"  Keputusan : {decision.action}")
+        click.echo(f"  Pesan kios: {decision.message}")
+        if decision.action == att.CHECKED_IN:
+            click.echo(f"  Terlambat : {decision.late_minutes} menit")
+        if decision.action in (att.CHECKED_OUT, att.CHECKOUT_UPDATED):
+            click.echo(f"  Pulang cepat: {'ya' if decision.left_early else 'tidak'}")
+
+
 def create_app(config_name=None):
     app = Flask(__name__)
     app.config.from_object(get_config(config_name))
@@ -364,6 +409,7 @@ def create_app(config_name=None):
     app.register_blueprint(schedules_bp)
     register_commands(app)
     register_recognition_commands(app)
+    register_attendance_commands(app)
 
     @app.after_request
     def security_headers(response):
