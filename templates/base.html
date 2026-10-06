@@ -16,6 +16,8 @@
       <nav class="mainnav" aria-label="Menu admin">
         <a href="{{ url_for('auth.dashboard') }}"
            {% if request.endpoint == 'auth.dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{{ url_for('attendance.list_attendance') }}"
+           {% if request.blueprint == 'attendance' %}aria-current="page"{% endif %}>Absensi</a>
         <a href="{{ url_for('employees.list_employees') }}"
            {% if request.blueprint == 'employees' %}aria-current="page"{% endif %}>Karyawan</a>
         <a href="{{ url_for('schedules.list_schedules') }}"

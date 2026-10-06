@@ -194,6 +194,7 @@ class AttendanceSession(TimestampMixin, db.Model):
 
     STATUS_ON_TIME = "hadir"
     STATUS_LATE = "terlambat"
+    STATUS_CANCELLED = "dibatalkan"  # dibatalkan admin; jam masuk/pulang dikosongkan
 
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(

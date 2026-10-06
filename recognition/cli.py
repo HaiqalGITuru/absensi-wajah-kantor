@@ -18,6 +18,7 @@ from models import Employee, User
 from services import ValidationError
 from services import audit_service as audit
 from services import biometric_service as biometric
+from services.cli_errors import friendly_db_errors
 
 
 def _load_models(app):
@@ -202,6 +203,7 @@ def register_recognition_commands(app):
                   help="Tetap simpan walau mirip karyawan lain (mis. kembar). Tercatat di audit.")
     @click.option("--timeout", default=60, show_default=True, help="Batas waktu pengambilan sampel (detik).")
     @click.option("--preview/--no-preview", default=True, show_default=True)
+    @friendly_db_errors
     def face_enroll(employee_code, admin_username, password, samples, replace_reason,
                     allow_similar, timeout, preview):
         """Mendaftarkan wajah karyawan dari kamera (FR-03).
@@ -321,6 +323,7 @@ def register_recognition_commands(app):
     @app.cli.command("face-identify")
     @click.option("--seconds", default=60, show_default=True, help="Lama pengujian.")
     @click.option("--preview/--no-preview", default=True, show_default=True)
+    @friendly_db_errors
     def face_identify(seconds, preview):
         """Uji pengenalan identitas langsung dari kamera.
 

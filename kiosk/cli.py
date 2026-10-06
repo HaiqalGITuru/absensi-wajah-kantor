@@ -13,12 +13,14 @@ import click
 
 from extensions import db
 from models import Employee
+from services.cli_errors import friendly_db_errors
 
 
 def register_kiosk_commands(app):
     @app.cli.command("kiosk-run")
     @click.option("--preview/--no-preview", default=True, show_default=True,
                   help="Tampilkan jendela kamera di komputer kios.")
+    @friendly_db_errors
     def kiosk_run(preview):
         """Menjalankan layanan kamera yang MENCATAT ABSENSI otomatis."""
         import cv2

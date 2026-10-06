@@ -422,3 +422,20 @@ def test_layanan_kamera_lanjut_setelah_galat_tak_terduga(app, tmp_path, budi, fr
     worker.run(should_stop=stop, idle_sleep=lambda s: None)
     assert worker.unexpected_errors == 1
     assert worker.recorded == 1
+
+
+def test_database_terputus_saat_muat_ulang_tetap_pakai_daftar_lama(app, tmp_path, budi):
+    from sqlalchemy.exc import OperationalError
+
+    worker, _ = make_worker(app, tmp_path, Cam(person_frame("budi", 1)))
+    worker.reload_templates(force=True)
+    old = worker.matcher
+    assert old.employee_count == 1
+
+    def down():
+        raise OperationalError("SELECT", {}, Exception("MySQL mati"))
+
+    worker.matcher_factory = down
+    worker.reload_templates(force=True)
+    assert worker.matcher is old
+    assert "Database tidak dapat dihubungi" in worker.detail

@@ -43,9 +43,11 @@ from routes.auth import bp as auth_bp
 from routes.employees import bp as employees_bp
 from routes.schedules import bp as schedules_bp
 from routes.kiosk import bp as kiosk_bp
+from routes.attendance import bp as attendance_bp
 from kiosk.cli import register_kiosk_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
+from services.cli_errors import friendly_db_errors
 from recognition.cli import register_recognition_commands
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,50}$")
@@ -71,6 +73,7 @@ def register_commands(app):
         prompt="Password (minimal 10 karakter)",
         confirmation_prompt="Ulangi password",
     )
+    @friendly_db_errors
     def create_admin(username, name, password):
         """Membuat akun admin baru tanpa menulis password di kode."""
         username = username.strip()
@@ -109,6 +112,7 @@ def register_commands(app):
         click.echo(f"Admin '{username}' berhasil dibuat.")
 
     @app.cli.command("biometric-keygen")
+    @friendly_db_errors
     def biometric_keygen():
         """Membuat file kunci enkripsi templat wajah (sekali saat instalasi)."""
         try:
@@ -135,6 +139,7 @@ def register_commands(app):
         )
 
     @app.cli.command("biometric-status")
+    @friendly_db_errors
     def biometric_status():
         """Memeriksa file kunci dan memastikan semua templat dapat dibaca."""
         try:
@@ -163,6 +168,7 @@ def register_commands(app):
     @click.confirmation_option(
         prompt="Buat kunci baru dan enkripsi ulang semua templat wajah?"
     )
+    @friendly_db_errors
     def biometric_rotate_key():
         """Membuat kunci baru dan mengenkripsi ulang semua templat."""
         try:
@@ -357,6 +363,7 @@ def register_attendance_commands(app):
     @click.option("--employee", "employee_code", required=True, help="Kode karyawan.")
     @click.option("--at", "at_text", default=None,
                   help='Waktu simulasi "YYYY-MM-DD HH:MM" (bawaan: sekarang).')
+    @friendly_db_errors
     def attendance_simulate(employee_code, at_text):
         """Menampilkan keputusan absensi untuk karyawan pada waktu tertentu.
 
@@ -413,6 +420,7 @@ def create_app(config_name=None):
     app.register_blueprint(employees_bp)
     app.register_blueprint(schedules_bp)
     app.register_blueprint(kiosk_bp)
+    app.register_blueprint(attendance_bp)
     register_commands(app)
     register_recognition_commands(app)
     register_attendance_commands(app)

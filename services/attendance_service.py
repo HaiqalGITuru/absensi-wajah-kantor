@@ -25,6 +25,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from extensions import db
 from models import AttendanceSession, Employee, office_now
+from services import ValidationError
+from services import audit_service as audit
 
 # Hasil keputusan
 CHECKED_IN = "checked_in"
@@ -255,3 +257,277 @@ def record(employee_id, now=None, score=None, settings=None, dry_run=False):
         db.session.rollback()
         return Decision(ERROR, "Gangguan sistem. Absensi BELUM tercatat, silakan hubungi admin.",
                         employee_id)
+
+
+# =====================================================================
+# Daftar harian dan koreksi oleh admin (Tahap 4C, BR-08)
+# =====================================================================
+
+METHOD_ADMIN = "admin"
+MIN_REASON = 10
+MAX_REASON = 300
+MAX_SHIFT_HOURS = 20
+
+ROSTER_STATUSES = {
+    "all": "Semua",
+    "present": "Sudah masuk",
+    "late": "Terlambat",
+    "absent": "Belum masuk",
+    "cancelled": "Dibatalkan",
+}
+
+
+def status_label(session, rule):
+    """Label status yang mudah dibaca admin."""
+    if session is None or session.check_in_at is None:
+        if session is not None and session.status == AttendanceSession.STATUS_CANCELLED:
+            return "Dibatalkan"
+        return "Libur" if rule is None else "Belum masuk"
+    if session.status == AttendanceSession.STATUS_LATE:
+        return f"Terlambat {session.late_minutes or 0} mnt"
+    return "Hadir"
+
+
+def daily_roster(work_date, q="", department="", status="all"):
+    """Semua karyawan aktif (dan karyawan nonaktif yang punya catatan) untuk satu
+    tanggal kerja, beserta sesinya. Dipakai halaman daftar absensi admin."""
+    from sqlalchemy import or_
+    from sqlalchemy.orm import selectinload
+
+    from models import WorkSchedule
+
+    sessions = {
+        s.employee_id: s
+        for s in db.session.execute(
+            db.select(AttendanceSession).filter_by(work_date=work_date)
+        ).scalars()
+    }
+    stmt = (
+        db.select(Employee)
+        .options(selectinload(Employee.work_schedule).selectinload(WorkSchedule.days))
+        .where(or_(Employee.is_active.is_(True), Employee.id.in_(list(sessions) or [0])))
+        .order_by(Employee.full_name, Employee.id)
+    )
+    q = (q or "").strip()
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(Employee.employee_code.ilike(like), Employee.full_name.ilike(like)))
+    if department:
+        stmt = stmt.where(Employee.department == department)
+
+    rows = []
+    for employee in db.session.execute(stmt).scalars():
+        session = sessions.get(employee.id)
+        schedule = employee.work_schedule
+        rule = schedule.day_for(work_date.weekday()) if schedule else None
+        present = session is not None and session.check_in_at is not None
+        cancelled = session is not None and session.status == AttendanceSession.STATUS_CANCELLED
+        late = present and session.status == AttendanceSession.STATUS_LATE
+
+        if status == "present" and not present:
+            continue
+        if status == "late" and not late:
+            continue
+        # Absensi yang dibatalkan berarti karyawan belum tercatat masuk.
+        if status == "absent" and (present or rule is None):
+            continue
+        if status == "cancelled" and not cancelled:
+            continue
+
+        rows.append({
+            "employee": employee,
+            "session": session,
+            "rule": rule,
+            "label": status_label(session, rule),
+            "present": present,
+            "late": late,
+            "cancelled": cancelled,
+        })
+    return rows
+
+
+def _parse_hm(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt).time().replace(second=0)
+        except ValueError:
+            continue
+    raise ValueError(text)
+
+
+def _clean_reason(reason, errors):
+    reason = " ".join((reason or "").split())
+    if len(reason) < MIN_REASON:
+        errors["reason"] = f"Alasan koreksi wajib diisi (minimal {MIN_REASON} karakter)."
+    elif len(reason) > MAX_REASON:
+        errors["reason"] = f"Alasan maksimal {MAX_REASON} karakter."
+    return reason
+
+
+def _snapshot(session):
+    def fmt(dt):
+        return dt.strftime("%d-%m %H:%M") if dt else "-"
+
+    if session is None:
+        return {"masuk": "-", "pulang": "-", "status": "-"}
+    return {
+        "masuk": fmt(session.check_in_at),
+        "pulang": fmt(session.check_out_at),
+        "status": session.status,
+    }
+
+
+def correct(employee_id, work_date, check_in_text, check_out_text, reason, actor_id, now=None):
+    """Koreksi absensi oleh admin. Status dan keterlambatan dihitung ulang dari
+    jadwal; admin tidak menentukan status secara manual (BR-09).
+
+    Mengembalikan (session, berubah). Melempar ValidationError jika tidak valid.
+    """
+    now = now or office_now()
+    errors = {}
+    reason = _clean_reason(reason, errors)
+
+    employee = db.session.get(Employee, employee_id)
+    if employee is None:
+        raise ValidationError({"_": "Karyawan tidak ditemukan."})
+
+    try:
+        t_in = _parse_hm(check_in_text)
+    except ValueError:
+        t_in, errors["check_in"] = None, "Jam masuk tidak valid (JJ:MM)."
+    try:
+        t_out = _parse_hm(check_out_text)
+    except ValueError:
+        t_out, errors["check_out"] = None, "Jam pulang tidak valid (JJ:MM)."
+    if t_in is None and "check_in" not in errors:
+        errors["check_in"] = "Jam masuk wajib diisi."
+    if errors:
+        raise ValidationError(errors)
+
+    schedule = employee.work_schedule
+    rule = schedule.day_for(work_date.weekday()) if schedule else None
+    start = end = None
+    if rule is not None:
+        start, end = shift_window(work_date, rule)
+
+    check_in_at = datetime.combine(work_date, t_in)
+    # Shift lintas tengah malam: jam masuk setelah tengah malam milik hari berikutnya.
+    if end is not None and end.date() > work_date and t_in < rule.start_time:
+        nxt = datetime.combine(work_date + timedelta(days=1), t_in)
+        if nxt <= end:
+            check_in_at = nxt
+
+    check_out_at = None
+    if t_out is not None:
+        check_out_at = datetime.combine(check_in_at.date(), t_out)
+        if check_out_at <= check_in_at:
+            check_out_at += timedelta(days=1)
+        if check_out_at - check_in_at > timedelta(hours=MAX_SHIFT_HOURS):
+            errors["check_out"] = (
+                f"Jam pulang terlalu jauh dari jam masuk (lebih dari {MAX_SHIFT_HOURS} jam)."
+            )
+
+    if check_in_at > now:
+        errors["check_in"] = "Jam masuk tidak boleh di masa depan."
+    if check_out_at is not None and check_out_at > now:
+        errors["check_out"] = "Jam pulang tidak boleh di masa depan."
+    if errors:
+        raise ValidationError(errors)
+
+    session = db.session.execute(
+        db.select(AttendanceSession)
+        .filter_by(employee_id=employee.id, work_date=work_date)
+        .with_for_update()
+    ).scalar_one_or_none()
+    before = _snapshot(session)
+    if session is None:
+        session = AttendanceSession(employee_id=employee.id, work_date=work_date)
+        db.session.add(session)
+
+    if session.check_in_at != check_in_at:
+        session.check_in_at = check_in_at
+        session.check_in_method = METHOD_ADMIN
+        session.check_in_score = None
+    if session.check_out_at != check_out_at:
+        session.check_out_at = check_out_at
+        session.check_out_method = METHOD_ADMIN if check_out_at else None
+        session.check_out_score = None
+
+    late = 0
+    if start is not None:
+        deadline = start + timedelta(minutes=schedule.late_tolerance_minutes)
+        if check_in_at > deadline:
+            late = math.ceil((check_in_at - deadline).total_seconds() / 60)
+    session.work_schedule_id = schedule.id if schedule else None
+    session.scheduled_start = start
+    session.scheduled_end = end
+    session.late_minutes = late
+    session.status = AttendanceSession.STATUS_LATE if late else AttendanceSession.STATUS_ON_TIME
+
+    after = _snapshot(session)
+    changes = audit.describe_changes(before, after)
+    if not changes:
+        db.session.rollback()
+        return session, False
+
+    db.session.flush()
+    audit.log_event(
+        audit.ATTENDANCE_CORRECTED,
+        user_id=actor_id,
+        entity_type="attendance_session",
+        entity_id=session.id,
+        description=(
+            f"Koreksi absensi {employee.employee_code} tanggal {work_date:%d-%m-%Y}. "
+            f"{changes}. Alasan: {reason}"
+        ),
+        commit=False,
+    )
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        raise ValidationError({"_": "Catatan absensi sedang diubah proses lain. Muat ulang halaman."})
+    return session, True
+
+
+def cancel(session_id, reason, actor_id):
+    """Membatalkan absensi (mis. kamera salah mengenali orang).
+
+    Jam masuk/pulang dikosongkan agar karyawan yang benar tetap bisa absen;
+    nilai lamanya tersimpan di audit log.
+    """
+    errors = {}
+    reason = _clean_reason(reason, errors)
+    if errors:
+        raise ValidationError(errors)
+
+    session = db.session.execute(
+        db.select(AttendanceSession).filter_by(id=session_id).with_for_update()
+    ).scalar_one_or_none()
+    if session is None or session.check_in_at is None:
+        raise ValidationError({"_": "Tidak ada absensi aktif yang dapat dibatalkan."})
+
+    before = _snapshot(session)
+    session.check_in_at = None
+    session.check_out_at = None
+    session.check_in_method = session.check_out_method = None
+    session.check_in_score = session.check_out_score = None
+    session.late_minutes = None
+    session.status = AttendanceSession.STATUS_CANCELLED
+    audit.log_event(
+        audit.ATTENDANCE_CANCELLED,
+        user_id=actor_id,
+        entity_type="attendance_session",
+        entity_id=session.id,
+        description=(
+            f"Absensi {session.employee.employee_code} tanggal {session.work_date:%d-%m-%Y} "
+            f"dibatalkan (sebelumnya masuk {before['masuk']}, pulang {before['pulang']}). "
+            f"Alasan: {reason}"
+        ),
+        commit=False,
+    )
+    db.session.commit()
+    return session

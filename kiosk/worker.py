@@ -14,6 +14,8 @@ Prinsip:
 import logging
 import time
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from camera.webcam import CameraError
 from extensions import db
 from kiosk import state as ks
@@ -85,13 +87,23 @@ class KioskWorker:
         try:
             self.matcher = self.matcher_factory()
             self.detail = ""
+            self._loaded_at = now
         except biometric.BiometricKeyError as exc:
             self.matcher = None
             self.detail = str(exc)
-            log.error("Templat tidak dapat dimuat: %s", exc)
-        finally:
-            self._end_read_transaction()
             self._loaded_at = now
+            log.error("Templat tidak dapat dimuat: %s", exc)
+        except SQLAlchemyError:
+            # Database terputus sesaat: tetap pakai daftar wajah terakhir yang
+            # berhasil dimuat, lalu coba lagi beberapa detik kemudian.
+            self.detail = "Database tidak dapat dihubungi; mencoba lagi."
+            self._loaded_at = now - self.template_reload_seconds + self.reopen_seconds
+            log.error("Database tidak dapat dihubungi saat memuat templat wajah.")
+        finally:
+            try:
+                self._end_read_transaction()
+            except SQLAlchemyError:
+                pass
 
     def _say(self, kind, text):
         self.message = {"kind": kind, "text": text, "at": self.wall_clock()}

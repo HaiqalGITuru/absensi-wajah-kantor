@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Koreksi absensi{% endblock %}
+{% block page_class %}page-medium{% endblock %}
+
+{% macro field_error(name, source=errors) %}
+  {% if source.get(name) %}<p class="field-error" id="{{ name }}-error">{{ source[name] }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<p class="breadcrumb">
+  <a href="{{ url_for('attendance.list_attendance', date=work_date.isoformat()) }}">Absensi {{ work_date.strftime('%d-%m-%Y') }}</a>
+</p>
+<h1>Koreksi absensi</h1>
+
+<section class="card summary-card">
+  <dl class="info-list">
+    <div><dt>Karyawan</dt><dd>{{ employee.employee_code }} — {{ employee.full_name }}</dd></div>
+    <div><dt>Tanggal kerja</dt><dd>{{ day_label }}</dd></div>
+    <div><dt>Jadwal hari itu</dt><dd>
+      {% if rule %}{{ schedule.name }}: {{ rule.start_time.strftime('%H:%M') }}–{{ rule.end_time.strftime('%H:%M') }},
+        toleransi {{ schedule.late_tolerance_minutes }} menit
+      {% else %}Tidak ada jam kerja (libur){% endif %}
+    </dd></div>
+    <div><dt>Status saat ini</dt><dd>{{ label }}</dd></div>
+    {% if session and session.check_in_at %}
+    <div><dt>Sumber jam masuk</dt><dd>{{ session.check_in_method or '-' }}</dd></div>
+    {% endif %}
+  </dl>
+</section>
+
+{% if errors %}
+<div class="flash flash-error" role="alert">
+  {{ errors.get('_') or 'Periksa kembali isian yang ditandai.' }}
+</div>
+{% endif %}
+
+<section class="card">
+  <h2 class="card-title">{{ 'Ubah jam absensi' if session and session.check_in_at else 'Tambahkan absensi' }}</h2>
+  <form method="post" class="form" novalidate
+        action="{{ url_for('attendance.correct', employee_id=employee.id, date=work_date.isoformat()) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="form-row">
+      <div>
+        <label for="check_in">Jam masuk</label>
+        <input id="check_in" name="check_in" type="time" required value="{{ values.get('check_in', '') }}"
+               {% if errors.get('check_in') %}aria-invalid="true" aria-describedby="check_in-error"{% endif %}>
+        {{ field_error('check_in') }}
+      </div>
+      <div>
+        <label for="check_out">Jam pulang</label>
+        <input id="check_out" name="check_out" type="time" value="{{ values.get('check_out', '') }}"
+               {% if errors.get('check_out') %}aria-invalid="true" aria-describedby="check_out-error"{% endif %}>
+        {{ field_error('check_out') }}
+      </div>
+    </div>
+    <p class="hint">Jam pulang boleh dikosongkan. Status hadir/terlambat dihitung otomatis dari jadwal. Jam pulang yang lebih awal dari jam masuk dianggap hari berikutnya.</p>
+
+    <label for="reason">Alasan koreksi</label>
+    <textarea id="reason" name="reason" rows="3" maxlength="300" required
+              {% if errors.get('reason') %}aria-invalid="true" aria-describedby="reason-error"{% endif %}>{{ values.get('reason', '') }}</textarea>
+    <p class="hint">Contoh: kamera mati pukul 07.30–08.15, karyawan absen di buku tamu. Alasan tercatat di audit log.</p>
+    {{ field_error('reason') }}
+
+    <div class="form-actions">
+      <button type="submit" class="btn">Simpan koreksi</button>
+      <a href="{{ url_for('attendance.list_attendance', date=work_date.isoformat()) }}">Batal</a>
+    </div>
+  </form>
+</section>
+
+{% if session and session.check_in_at %}
+<section class="card" aria-labelledby="cancel-title">
+  <h2 class="card-title" id="cancel-title">Batalkan absensi ini</h2>
+  <p class="muted">
+    Gunakan jika absensi tercatat keliru, misalnya kamera salah mengenali orang.
+    Jam masuk dan pulang akan dikosongkan; nilai lamanya tetap tersimpan di audit log,
+    dan karyawan tetap bisa absen ulang lewat kamera.
+  </p>
+  {% if cancel_errors.get('_') %}<div class="flash flash-error" role="alert">{{ cancel_errors['_'] }}</div>{% endif %}
+  <form method="post" class="form revoke-form" action="{{ url_for('attendance.cancel') }}"
+        onsubmit='return confirm({{ ("Batalkan absensi " ~ employee.full_name ~ " tanggal " ~ work_date.strftime("%d-%m-%Y") ~ "?")|tojson }});'>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="session_id" value="{{ session.id }}">
+    <label for="cancel-reason">Alasan pembatalan</label>
+    <textarea id="cancel-reason" name="reason" rows="2" maxlength="300" required
+              {% if cancel_errors.get('reason') %}aria-invalid="true" aria-describedby="cancel-reason-error"{% endif %}></textarea>
+    {% if cancel_errors.get('reason') %}<p class="field-error" id="cancel-reason-error">{{ cancel_errors['reason'] }}</p>{% endif %}
+    <div class="form-actions">
+      <button type="submit" class="btn btn-danger">Batalkan absensi</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

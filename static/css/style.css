@@ -537,3 +537,40 @@ a.btn { text-decoration: none; display: inline-block; }
   padding-top: 1rem;
   border-top: 1px solid var(--line);
 }
+
+/* Tahap 4C: daftar dan koreksi absensi */
+.page-wide { max-width: 72rem; }
+.filters-attendance { grid-template-columns: 1fr 1.6fr 1.4fr 1fr auto; }
+
+@media (max-width: 720px) {
+  .filters-attendance { grid-template-columns: 1fr; }
+}
+
+.badge-warn { background: #fdf1d8; color: #8a5a00; }
+
+.form textarea {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.form textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+  border-color: var(--brand);
+}
+
+.form textarea[aria-invalid="true"] { border-color: var(--error); }
+
+.summary-card { margin-top: 1rem; }
+
+.info-list { margin: 0; display: grid; gap: 0.5rem; }
+.info-list > div { display: grid; grid-template-columns: 10rem 1fr; gap: 1rem; }
+.info-list dt { color: var(--muted); }
+.info-list dd { margin: 0; text-align: left; font-weight: 600; }
+
+@media (max-width: 560px) {
+  .info-list > div { grid-template-columns: 1fr; gap: 0.1rem; }
+}

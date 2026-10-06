@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Absensi{% endblock %}
+{% block page_class %}page-wide{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Absensi harian</h1>
+</div>
+
+<form method="get" class="filters filters-attendance" role="search">
+  <div class="field">
+    <label for="date">Tanggal</label>
+    <input id="date" name="date" type="date" value="{{ work_date.isoformat() }}" max="{{ today.isoformat() }}">
+  </div>
+  <div class="field">
+    <label for="q">Cari kode atau nama</label>
+    <input id="q" name="q" type="search" value="{{ q }}" maxlength="100">
+  </div>
+  <div class="field">
+    <label for="department">Departemen</label>
+    <select id="department" name="department">
+      <option value="">Semua departemen</option>
+      {% for d in departments %}
+      <option value="{{ d }}" {% if d == department %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% for value, label in statuses.items() %}
+      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field field-actions">
+    <button type="submit" class="btn">Terapkan</button>
+  </div>
+</form>
+
+<p class="result-count">
+  <strong>{{ day_label }}</strong> —
+  {{ counts.present }} sudah masuk ({{ counts.late }} terlambat), {{ counts.absent }} belum masuk.
+</p>
+
+{% if rows %}
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Kode</th>
+          <th scope="col">Nama</th>
+          <th scope="col">Departemen</th>
+          <th scope="col">Masuk</th>
+          <th scope="col">Pulang</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="visually-hidden">Tindakan</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set s = r.session %}
+        <tr>
+          <td class="nowrap"><code>{{ r.employee.employee_code }}</code></td>
+          <td>
+            {{ r.employee.full_name }}
+            {% if not r.employee.is_active %}<span class="badge badge-off">Nonaktif</span>{% endif %}
+          </td>
+          <td>{{ r.employee.department }}</td>
+          <td class="nowrap">
+            {% if s and s.check_in_at %}
+              {{ s.check_in_at.strftime('%H:%M') }}
+              {% if s.check_in_method == 'admin' %}<span class="badge badge-info">admin</span>{% endif %}
+            {% else %}–{% endif %}
+          </td>
+          <td class="nowrap">
+            {% if s and s.check_out_at %}
+              {{ s.check_out_at.strftime('%H:%M') }}
+              {% if s.check_out_at.date() != s.work_date %}<span class="muted">(+1)</span>{% endif %}
+              {% if s.check_out_method == 'admin' %}<span class="badge badge-info">admin</span>{% endif %}
+              {% if s.left_early %}<span class="badge badge-warn">pulang cepat</span>{% endif %}
+            {% else %}–{% endif %}
+          </td>
+          <td class="nowrap">
+            {% if r.late %}<span class="badge badge-warn">{{ r.label }}</span>
+            {% elif r.present %}<span class="badge badge-ok">{{ r.label }}</span>
+            {% else %}<span class="badge badge-off">{{ r.label }}</span>{% endif %}
+          </td>
+          <td>
+            {% if not is_future %}
+            <div class="row-actions">
+              <a href="{{ url_for('attendance.correct', employee_id=r.employee.id, date=work_date.isoformat()) }}">Koreksi</a>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if pages > 1 %}
+<nav class="pagination" aria-label="Halaman">
+  {% if page > 1 %}
+  <a href="{{ url_for('attendance.list_attendance', date=work_date.isoformat(), q=q, department=department, status=status, page=page - 1) }}">Sebelumnya</a>
+  {% endif %}
+  <span>Halaman {{ page }} dari {{ pages }}</span>
+  {% if page < pages %}
+  <a href="{{ url_for('attendance.list_attendance', date=work_date.isoformat(), q=q, department=department, status=status, page=page + 1) }}">Berikutnya</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="card empty"><p>Tidak ada data yang cocok dengan filter ini.</p></div>
+{% endif %}
+{% endblock %}

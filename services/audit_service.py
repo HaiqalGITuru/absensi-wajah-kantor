@@ -29,6 +29,9 @@ SCHEDULE_ACTIVATED = "schedule_activated"
 FACE_TEMPLATE_CREATED = "face_template_created"
 FACE_TEMPLATE_REVOKED = "face_template_revoked"
 FACE_ENROLL_SIMILAR_OVERRIDE = "face_enroll_similar_override"
+
+ATTENDANCE_CORRECTED = "attendance_corrected"
+ATTENDANCE_CANCELLED = "attendance_cancelled"
 BIOMETRIC_KEY_CREATED = "biometric_key_created"
 BIOMETRIC_KEY_ROTATED = "biometric_key_rotated"
 
