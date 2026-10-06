@@ -52,6 +52,16 @@ class Config:
     # Lokasi file kunci enkripsi templat wajah. Simpan DI LUAR folder proyek.
     BIOMETRIC_KEY_FILE = os.getenv("BIOMETRIC_KEY_FILE")
 
+    # Kamera (Tahap 3). Backend "dshow" disarankan untuk Windows.
+    CAMERA_INDEX = int(os.getenv("CAMERA_INDEX", "0"))
+    # Jika diisi (mis. C270), kamera dicari berdasarkan nama dan CAMERA_INDEX
+    # hanya dipakai sebagai cadangan.
+    CAMERA_NAME = os.getenv("CAMERA_NAME", "")
+    CAMERA_BACKEND = os.getenv("CAMERA_BACKEND", "dshow" if os.name == "nt" else "any")
+    CAMERA_WIDTH = int(os.getenv("CAMERA_WIDTH", "1280"))
+    CAMERA_HEIGHT = int(os.getenv("CAMERA_HEIGHT", "720"))
+    CAMERA_FPS = int(os.getenv("CAMERA_FPS", "30"))
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
