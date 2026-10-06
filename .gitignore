@@ -28,3 +28,6 @@ backups/
 .idea/
 Thumbs.db
 desktop.ini
+
+# File model AI (diunduh dengan models-download)
+model_files/

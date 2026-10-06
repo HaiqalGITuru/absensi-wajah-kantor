@@ -62,6 +62,16 @@ class Config:
     CAMERA_HEIGHT = int(os.getenv("CAMERA_HEIGHT", "720"))
     CAMERA_FPS = int(os.getenv("CAMERA_FPS", "30"))
 
+    # Model AI (Tahap 3B). Folder berisi file .onnx; tidak ikut ke Git.
+    MODEL_DIR = os.getenv("MODEL_DIR", str(BASE_DIR / "model_files"))
+    # Lebar gambar saat deteksi; frame lebih besar diperkecil agar cepat.
+    FACE_DETECT_WIDTH = int(os.getenv("FACE_DETECT_WIDTH", "640"))
+    # Ambang kualitas wajah. FACE_MIN_SHARPNESS masih SEMENTARA dan perlu
+    # dikalibrasi dengan kamera dan lokasi sebenarnya (lihat face-check).
+    FACE_MIN_SCORE = float(os.getenv("FACE_MIN_SCORE", "0.85"))
+    FACE_MIN_SIZE = int(os.getenv("FACE_MIN_SIZE", "80"))
+    FACE_MIN_SHARPNESS = float(os.getenv("FACE_MIN_SHARPNESS", "40"))
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
