@@ -62,3 +62,20 @@ def schedule(app):
     db.session.add(s)
     db.session.commit()
     return s
+
+
+@pytest.fixture
+def biometric_keys(app, tmp_path):
+    """File kunci biometrik di folder sementara pengujian."""
+    from services import biometric_service
+
+    app.config["BIOMETRIC_KEY_FILE"] = str(tmp_path / "secrets" / "biometric_keys.json")
+    biometric_service.generate_keyring()
+    return app.config["BIOMETRIC_KEY_FILE"]
+
+
+def make_embedding(seed=1, dim=512):
+    """Embedding sintetis untuk pengujian (bukan data wajah asli)."""
+    import math
+
+    return [math.sin(seed * 1000 + i) for i in range(dim)]

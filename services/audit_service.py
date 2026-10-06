@@ -26,6 +26,11 @@ SCHEDULE_UPDATED = "schedule_updated"
 SCHEDULE_DEACTIVATED = "schedule_deactivated"
 SCHEDULE_ACTIVATED = "schedule_activated"
 
+FACE_TEMPLATE_CREATED = "face_template_created"
+FACE_TEMPLATE_REVOKED = "face_template_revoked"
+BIOMETRIC_KEY_CREATED = "biometric_key_created"
+BIOMETRIC_KEY_ROTATED = "biometric_key_rotated"
+
 MAX_DESCRIPTION_LENGTH = 1000
 
 

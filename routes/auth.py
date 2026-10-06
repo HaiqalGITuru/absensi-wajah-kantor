@@ -10,7 +10,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from extensions import db, login_manager
 from models import AuditLog, User
 from services import audit_service as audit
-from services import employee_service, schedule_service
+from services import biometric_service, employee_service, schedule_service
 
 bp = Blueprint("auth", __name__)
 
@@ -121,7 +121,12 @@ def dashboard():
         "active_employees": employee_service.count_employees(active=True),
         "inactive_employees": employee_service.count_employees(active=False),
         "active_schedules": len(schedule_service.active_schedules()),
+        "employees_with_face": biometric_service.count_employees_with_templates(),
     }
+    key_status = biometric_service.keyring_status()
     return render_template(
-        "dashboard.html", recent_logs=recent_logs, summary=summary
+        "dashboard.html",
+        recent_logs=recent_logs,
+        summary=summary,
+        key_status=key_status,
     )

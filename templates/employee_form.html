@@ -65,4 +65,63 @@
     </div>
   </form>
 </section>
+
+{% if employee %}
+<section class="card" aria-labelledby="face-title">
+  <h2 class="card-title" id="face-title">Templat wajah</h2>
+
+  {% if templates %}
+  <p class="muted">
+    {{ templates|length }} templat tersimpan dalam bentuk terenkripsi.
+    Data biometrik tidak pernah ditampilkan di halaman ini.
+  </p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Didaftarkan</th>
+          <th scope="col">Model</th>
+          <th scope="col">Versi kunci</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td class="nowrap">{{ t.created_at.strftime('%d-%m-%Y %H:%M') }}</td>
+          <td><code>{{ t.model_name }}</code></td>
+          <td>v{{ t.encryption_key_version }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if revoke_errors.get('_') %}
+  <div class="flash flash-error" role="alert">{{ revoke_errors['_'] }}</div>
+  {% endif %}
+
+  <form method="post" class="form revoke-form"
+        action="{{ url_for('employees.revoke_face_templates', employee_id=employee.id) }}"
+        onsubmit='return confirm({{ ("Cabut semua templat wajah " ~ employee.full_name ~ "? Tindakan ini tidak dapat dibatalkan.")|tojson }});'>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="reason">Alasan pencabutan</label>
+    <input id="reason" name="reason" type="text" maxlength="300" required
+           value="{{ revoke_reason }}"
+           {% if revoke_errors.get('reason') %}aria-invalid="true" aria-describedby="reason-error"{% endif %}>
+    <p class="hint">Contoh: wajah berubah signifikan, permintaan karyawan, atau karyawan berhenti bekerja.</p>
+    {% if revoke_errors.get('reason') %}<p class="field-error" id="reason-error">{{ revoke_errors['reason'] }}</p>{% endif %}
+    <div class="form-actions">
+      <button type="submit" class="btn btn-danger">Cabut semua templat wajah</button>
+    </div>
+  </form>
+  {% else %}
+  {% if revoke_errors.get('_') %}
+  <div class="flash flash-error" role="alert">{{ revoke_errors['_'] }}</div>
+  {% endif %}
+  <p class="muted">
+    Belum ada templat wajah. Pendaftaran wajah melalui kamera tersedia setelah Tahap 3.
+  </p>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

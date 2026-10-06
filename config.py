@@ -49,6 +49,9 @@ class Config:
 
     OFFICE_TIMEZONE = os.getenv("OFFICE_TIMEZONE", "Asia/Makassar")
 
+    # Lokasi file kunci enkripsi templat wajah. Simpan DI LUAR folder proyek.
+    BIOMETRIC_KEY_FILE = os.getenv("BIOMETRIC_KEY_FILE")
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
@@ -76,6 +79,8 @@ class TestingConfig(Config):
     # CSRF dimatikan agar tes formulir sederhana; ada tes khusus yang
     # menyalakannya kembali untuk memastikan perlindungan CSRF bekerja.
     WTF_CSRF_ENABLED = False
+    # Diisi oleh fixture pengujian dengan folder sementara.
+    BIOMETRIC_KEY_FILE = None
 
 
 CONFIGS = {

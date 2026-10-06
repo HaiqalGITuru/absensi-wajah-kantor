@@ -18,7 +18,18 @@
     <span class="summary-value">{{ summary.active_schedules }}</span>
     <span class="summary-label">Jadwal kerja aktif</span>
   </a>
+  <a class="summary-item" href="{{ url_for('employees.list_employees') }}">
+    <span class="summary-value">{{ summary.employees_with_face }}</span>
+    <span class="summary-label">Wajah terdaftar</span>
+  </a>
 </section>
+
+{% if not key_status.ok %}
+<div class="flash flash-error" role="alert">
+  Kunci enkripsi templat wajah belum siap: {{ key_status.message }}
+  Pendaftaran dan pengenalan wajah tidak dapat berjalan sampai kunci tersedia.
+</div>
+{% endif %}
 
 {% if summary.active_schedules == 0 %}
 <div class="flash flash-info">

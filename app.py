@@ -8,6 +8,11 @@ atau:
 
 Membuat akun admin pertama:
     flask --app app create-admin
+
+Kunci enkripsi templat wajah:
+    flask --app app biometric-keygen      (sekali, saat instalasi)
+    flask --app app biometric-status      (memeriksa kunci dan templat)
+    flask --app app biometric-rotate-key  (mengganti kunci)
 """
 import re
 
@@ -18,13 +23,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 import models  # noqa: F401  (mendaftarkan model untuk Flask-Migrate)
-from config import get_config
+from config import BASE_DIR, get_config
 from extensions import csrf, db, login_manager, migrate
 from models import User, office_now
 from routes.auth import bp as auth_bp
 from routes.employees import bp as employees_bp
 from routes.schedules import bp as schedules_bp
 from services import audit_service as audit
+from services import biometric_service as biometric
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,50}$")
 MIN_PASSWORD_LENGTH = 10
@@ -85,6 +91,70 @@ def register_commands(app):
         )
         db.session.commit()
         click.echo(f"Admin '{username}' berhasil dibuat.")
+
+    @app.cli.command("biometric-keygen")
+    def biometric_keygen():
+        """Membuat file kunci enkripsi templat wajah (sekali saat instalasi)."""
+        try:
+            path = biometric.generate_keyring()
+        except biometric.BiometricKeyError as exc:
+            raise click.ClickException(str(exc))
+
+        audit.log_event(
+            audit.BIOMETRIC_KEY_CREATED,
+            entity_type="biometric_key",
+            entity_id=1,
+            description="File kunci biometrik dibuat melalui CLI (v1)",
+        )
+        click.echo(f"File kunci dibuat: {path}")
+        if BASE_DIR in path.resolve().parents:
+            click.secho(
+                "PERINGATAN: file kunci berada di dalam folder proyek. "
+                "Pindahkan ke luar folder proyek dan perbarui BIOMETRIC_KEY_FILE.",
+                fg="yellow",
+            )
+        click.echo(
+            "Simpan salinan file ini di tempat aman yang terpisah. "
+            "Jika file ini hilang, semua wajah harus didaftarkan ulang."
+        )
+
+    @app.cli.command("biometric-status")
+    def biometric_status():
+        """Memeriksa file kunci dan memastikan semua templat dapat dibaca."""
+        try:
+            active, keys = biometric.load_keyring()
+        except biometric.BiometricKeyError as exc:
+            raise click.ClickException(str(exc))
+
+        templates = db.session.execute(db.select(models.FaceTemplate)).scalars().all()
+        failed = 0
+        for template in templates:
+            try:
+                biometric.decrypt_template(template, (active, keys))
+            except biometric.TemplateDecryptionError:
+                failed += 1
+
+        click.echo(f"Kunci aktif     : v{active} ({len(keys)} versi tersimpan)")
+        click.echo(f"Templat wajah   : {len(templates)}")
+        click.echo(f"Gagal diverifikasi: {failed}")
+        if failed:
+            raise click.ClickException(
+                "Ada templat yang tidak bisa dibaca. Periksa file kunci atau "
+                "kemungkinan perubahan data di database."
+            )
+
+    @app.cli.command("biometric-rotate-key")
+    @click.confirmation_option(
+        prompt="Buat kunci baru dan enkripsi ulang semua templat wajah?"
+    )
+    def biometric_rotate_key():
+        """Membuat kunci baru dan mengenkripsi ulang semua templat."""
+        try:
+            version, count = biometric.rotate_key()
+        except biometric.BiometricKeyError as exc:
+            raise click.ClickException(str(exc))
+        click.echo(f"Kunci aktif sekarang v{version}. {count} templat dienkripsi ulang.")
+        click.echo("Perbarui salinan cadangan file kunci Anda.")
 
 
 def create_app(config_name=None):

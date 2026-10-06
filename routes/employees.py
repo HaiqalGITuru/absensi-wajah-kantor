@@ -8,7 +8,7 @@ from extensions import db
 from models import Employee
 from routes.auth import _safe_next_url
 from services import ValidationError
-from services import employee_service, schedule_service
+from services import biometric_service, employee_service, schedule_service
 
 bp = Blueprint("employees", __name__, url_prefix="/admin/employees")
 
@@ -26,12 +26,15 @@ def _form_values(employee=None):
     }
 
 
-def _render_form(employee, values, errors, status=200):
+def _render_form(employee, values, errors, status=200, revoke_errors=None):
     return render_template(
         "employee_form.html",
         employee=employee,
         values=values,
         errors=errors,
+        templates=biometric_service.templates_for(employee) if employee else [],
+        revoke_errors=revoke_errors or {},
+        revoke_reason=request.form.get("reason", "") if revoke_errors else "",
         schedules=schedule_service.active_schedules(),
         summarize_days=schedule_service.summarize_days,
         departments=employee_service.list_departments(),
@@ -51,9 +54,11 @@ def list_employees():
     pagination = employee_service.list_employees(
         q=q, department=department, status=status, page=page
     )
+    face_counts = biometric_service.template_counts([e.id for e in pagination.items])
     return render_template(
         "employees.html",
         pagination=pagination,
+        face_counts=face_counts,
         q=q,
         department=department,
         status=status,
@@ -117,3 +122,25 @@ def deactivate(employee_id):
 @login_required
 def activate(employee_id):
     return _set_active(employee_id, True)
+
+
+@bp.post("/<int:employee_id>/face-templates/revoke")
+@login_required
+def revoke_face_templates(employee_id):
+    """Mencabut (menghapus permanen) semua templat wajah karyawan."""
+    employee = db.get_or_404(Employee, employee_id)
+    try:
+        count = biometric_service.revoke_templates(
+            employee, current_user.id, request.form.get("reason")
+        )
+    except ValidationError as exc:
+        db.session.rollback()
+        return _render_form(
+            employee, _form_values(employee), {}, 400, revoke_errors=exc.errors
+        )
+    flash(
+        f"{count} templat wajah {employee.employee_code} telah dicabut. "
+        "Karyawan perlu didaftarkan ulang agar dikenali kamera.",
+        "success",
+    )
+    return redirect(url_for("employees.edit", employee_id=employee.id))

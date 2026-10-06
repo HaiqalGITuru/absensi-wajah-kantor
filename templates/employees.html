@@ -47,6 +47,7 @@
           <th scope="col">Nama lengkap</th>
           <th scope="col">Departemen</th>
           <th scope="col">Jadwal</th>
+          <th scope="col">Wajah</th>
           <th scope="col">Status</th>
           <th scope="col"><span class="visually-hidden">Tindakan</span></th>
         </tr>
@@ -58,6 +59,14 @@
           <td>{{ e.full_name }}</td>
           <td>{{ e.department }}</td>
           <td class="nowrap">{{ e.work_schedule.name if e.work_schedule else '–' }}</td>
+          <td class="nowrap">
+            {% set n = face_counts.get(e.id, 0) %}
+            {% if n %}
+            <span class="badge badge-ok">Terdaftar ({{ n }})</span>
+            {% else %}
+            <span class="badge badge-off">Belum</span>
+            {% endif %}
+          </td>
           <td>
             {% if e.is_active %}
             <span class="badge badge-ok">Aktif</span>
