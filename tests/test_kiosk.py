@@ -256,7 +256,7 @@ def test_status_kios_menyatakan_anti_foto_belum_aktif(app, tmp_path, budi):
     worker, _ = make_worker(app, tmp_path, Cam(person_frame("budi", 1)))
     worker.reload_templates(force=True)
     worker.publish(force=True)
-    assert ks.admin_view(worker.state.read(), now=worker.wall_clock())["liveness"] is False
+    assert ks.admin_view(worker.state.read(), now=worker.wall_clock())["liveness"] == "off"
 
 
 # ---------------------------------------------------------------- halaman web
@@ -297,7 +297,7 @@ def test_dashboard_menampilkan_status_layanan_kamera(app, auth_client, tmp_path)
     body = auth_client.get("/admin").get_data(as_text=True)
     assert "Layanan kamera kios" in body
     assert "Tidak berjalan" in body
-    assert "anti-foto (keaktifan wajah) <strong>belum aktif</strong>" in body
+    assert "anti-foto <strong>aktif dalam uji coba</strong>" in body
 
 
 def test_cli_kiosk_run_menolak_salinan_kedua(app, tmp_path):

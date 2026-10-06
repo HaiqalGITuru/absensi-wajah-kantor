@@ -103,5 +103,5 @@ def admin_view(state, now=None, stale_seconds=STALE_SECONDS):
         "detail": state.get("detail") or "",
         "employees": state.get("employees", 0),
         "recorded_today": state.get("recorded", 0),
-        "liveness": bool(state.get("liveness", False)),
+        "liveness": state.get("liveness") or "off",
     }

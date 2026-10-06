@@ -32,6 +32,8 @@ FACE_ENROLL_SIMILAR_OVERRIDE = "face_enroll_similar_override"
 
 ATTENDANCE_CORRECTED = "attendance_corrected"
 ATTENDANCE_CANCELLED = "attendance_cancelled"
+
+LIVENESS_REJECTED = "liveness_rejected"
 BIOMETRIC_KEY_CREATED = "biometric_key_created"
 BIOMETRIC_KEY_ROTATED = "biometric_key_rotated"
 

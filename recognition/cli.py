@@ -38,6 +38,27 @@ def _load_models(app):
     )
 
 
+def _load_liveness(app):
+    """Mengembalikan (PassiveLiveness atau None, LivenessSettings)."""
+    from recognition import model_files as mf
+    from recognition.liveness import LivenessSettings, PassiveLiveness
+
+    try:
+        settings = LivenessSettings.from_config(app.config)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    if not settings.passive:
+        return None, settings
+    try:
+        v2 = mf.verify(app.config["MODEL_DIR"], mf.MINIFAS_V2)
+        v1se = mf.verify(app.config["MODEL_DIR"], mf.MINIFAS_V1SE)
+    except mf.ModelFileError as exc:
+        raise click.ClickException(
+            f"{exc} Model anti-foto dibutuhkan karena LIVENESS_MODE={settings.mode}."
+        )
+    return PassiveLiveness([(v2, 2.7), (v1se, 4.0)]), settings
+
+
 def _open_camera(app):
     from camera import webcam
 
@@ -327,15 +348,18 @@ def register_recognition_commands(app):
     def face_identify(seconds, preview):
         """Uji pengenalan identitas langsung dari kamera.
 
-        TIDAK mencatat absensi. Dipakai untuk menguji akurasi (PRD 13.2).
+        TIDAK mencatat absensi. Dipakai untuk menguji akurasi (PRD 13.2) dan
+        anti-foto (TC-19).
         """
         import cv2
 
         from camera import webcam
         from recognition import identify
+        from recognition.liveness import REASON_TEXT, LivenessGate
         from tracking.face_tracker import FaceTracker, TrackerSettings
 
         detector, embedder, quality = _load_models(app)
+        liveness, live_settings = _load_liveness(app)
         matcher = _build_matcher(app, embedder)
         if matcher.template_count == 0:
             raise click.ClickException(
@@ -347,33 +371,43 @@ def register_recognition_commands(app):
             for e in db.session.execute(db.select(Employee)).scalars()
         }
         tracker = FaceTracker(TrackerSettings.from_config(app.config))
+        gate = LivenessGate(live_settings)
 
         click.echo(
             f"{matcher.employee_count} karyawan ({matcher.template_count} templat) dimuat. "
             f"Ambang {matcher.threshold}, selisih minimal {matcher.margin}."
         )
+        click.echo(f"Anti-foto: {live_settings.mode}")
         click.secho("Mode uji: absensi TIDAK dicatat.", fg="yellow")
         cam = _open_camera(app)
         window = "Uji pengenalan - tekan Q untuk berhenti"
 
-        def show(frame, tracks):
-            header = [f"Terdaftar: {matcher.employee_count} karyawan", "Mode uji, tanpa absensi"]
-            cv2.imshow(window, identify.annotate(frame, tracks, people, header))
+        def show(frame, tracks, gate_state):
+            header = [f"Terdaftar: {matcher.employee_count} karyawan",
+                      f"Mode uji, tanpa absensi. Anti-foto: {live_settings.mode}"]
+            cv2.imshow(window, identify.annotate(frame, tracks, people, header, gate_state))
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), ord("Q"), 27):
                 return False
             return cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) >= 1
 
+        def stamp():
+            return _dt.datetime.now().strftime("%H:%M:%S")
+
         def on_event(event):
             code, name = people.get(event.employee_id, ("?", "?"))
-            stamp = _dt.datetime.now().strftime("%H:%M:%S")
             note = " (dalam jeda, tidak dihitung ulang)" if event.in_cooldown else ""
-            click.echo(f"[{stamp}] Dikenali: {code} {name} dalam {event.seconds_to_confirm} dtk{note}")
+            click.echo(f"[{stamp()}] Dikenali: {code} {name} dalam {event.seconds_to_confirm} dtk{note}")
+
+        def on_reject(event, reason):
+            code, name = people.get(event.employee_id, ("?", "?"))
+            click.secho(f"[{stamp()}] DITOLAK anti-foto: {code} {name} ({REASON_TEXT[reason]})", fg="red")
 
         try:
             stats = identify.run(
                 cam, detector, embedder, matcher, quality, tracker, seconds=seconds,
                 on_frame=show if preview else None, on_event=on_event,
+                liveness=liveness, gate=gate, on_reject=on_reject,
             )
         except webcam.CameraError as exc:
             raise click.ClickException(str(exc))
@@ -382,17 +416,21 @@ def register_recognition_commands(app):
             if preview:
                 cv2.destroyAllWindows()
 
+        def dash(value):
+            return "-" if value is None else value
+
         click.echo("")
         click.echo("Hasil uji pengenalan")
         click.echo(f"  Frame diproses             : {stats['frames']} ({stats['process_ms']} ms per frame)")
         click.echo(f"  Orang dikenali             : {stats['confirmations']} kali "
                    f"(+{stats['repeats_in_cooldown']} ulangan dalam jeda)")
-        click.echo(f"  Rata-rata waktu dikenali   : "
-                   f"{stats['avg_seconds_to_confirm'] if stats['avg_seconds_to_confirm'] is not None else '-'} dtk")
+        click.echo(f"  Ditolak anti-foto          : {stats['liveness_rejected']} kali")
+        click.echo(f"  Rata-rata waktu dikenali   : {dash(stats['avg_seconds_to_confirm'])} dtk")
         click.echo(f"  Jejak tidak dikenal        : {stats['unknown_tracks']}")
         click.echo(f"  Jejak ragu-ragu            : {stats['ambiguous_tracks']}")
         click.echo("  Data kalibrasi ambang:")
-        click.echo(f"    Skor cocok terendah      : {stats['min_match_score'] if stats['min_match_score'] is not None else '-'}")
-        click.echo(f"    Skor tidak dikenal tertinggi: "
-                   f"{stats['max_unknown_score'] if stats['max_unknown_score'] is not None else '-'}")
+        click.echo(f"    Skor cocok terendah      : {dash(stats['min_match_score'])}")
+        click.echo(f"    Skor tidak dikenal tertinggi: {dash(stats['max_unknown_score'])}")
         click.echo(f"    Ambang saat ini          : {matcher.threshold}")
+        click.echo(f"    Keaktifan terendah lolos : {dash(stats['min_live_passed'])} "
+                   f"(ambang asli {live_settings.real_threshold})")

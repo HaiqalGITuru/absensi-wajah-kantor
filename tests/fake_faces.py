@@ -13,10 +13,12 @@ from recognition.embedder import EMBEDDING_DIM
 PERSON_BRIGHTNESS = {"budi": 100, "sari": 130, "tamu": 160, "budi_kembar": 101}
 
 
-def make_detection(x=200, y=150, w=160, h=200, score=0.92):
+def make_detection(x=200, y=150, w=160, h=200, score=0.92, nose_shift=0.0):
+    """Wajah buatan format YuNet. nose_shift = arah kepala (signed yaw)."""
     cx, cy, half = x + w / 2, y + h * 0.4, w * 0.2
+    nose_x = cx + nose_shift * 2 * half
     return FaceDetection(raw=np.array(
-        [x, y, w, h, cx - half, cy, cx + half, cy, cx, cy + h * 0.15,
+        [x, y, w, h, cx - half, cy, cx + half, cy, nose_x, cy + h * 0.15,
          cx - half * 0.8, cy + h * 0.3, cx + half * 0.8, cy + h * 0.3, score],
         dtype=np.float32))
 
@@ -34,11 +36,24 @@ def _person_vector(value):
 
 
 class FakeDetector:
-    def __init__(self, boxes=None):
+    def __init__(self, boxes=None, nose_shift=0.0):
         self.boxes = boxes if boxes is not None else [(200, 150, 160, 200)]
+        self.nose_shift = nose_shift  # bisa diubah selama tes untuk meniru menoleh
 
     def detect(self, frame):
-        return [make_detection(*b) for b in self.boxes]
+        return [make_detection(*b, nose_shift=self.nose_shift) for b in self.boxes]
+
+
+class FakeLiveness:
+    """Model anti-foto tiruan: skor tetap yang bisa diubah selama tes."""
+
+    name = "fake-liveness"
+
+    def __init__(self, score):
+        self.value = score
+
+    def score(self, frame, detection):
+        return self.value
 
 
 class FakeEmbedder:

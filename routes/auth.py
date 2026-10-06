@@ -146,4 +146,5 @@ def dashboard():
         summary=summary,
         key_status=key_status,
         kiosk_status=kiosk_status,
+        liveness_mode=current_app.config.get("LIVENESS_MODE", "off"),
     )

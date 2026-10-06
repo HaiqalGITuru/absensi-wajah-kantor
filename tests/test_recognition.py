@@ -153,7 +153,10 @@ def test_daftar_model_resmi_lengkap():
     for model in mf.ALL_MODELS:
         assert len(model.sha256) == 64
         assert model.license in ("MIT", "Apache-2.0")
+    for model in mf.FACE_MODELS:
         assert any("opencv_zoo" in url for url in model.urls)
+    for model in mf.LIVENESS_MODELS:
+        assert "Silent-Face-Anti-Spoofing" in model.source
 
 
 # ---------------------------------------------------------------- uji langsung (tanpa model)

@@ -54,7 +54,32 @@ SFACE = ModelFile(
     ),
 )
 
-ALL_MODELS = (YUNET, SFACE)
+# Model anti-foto pasif (Tahap 4D). Arsitektur dan bobot asli dari
+# Silent-Face-Anti-Spoofing (Minivision, Apache-2.0); file ONNX dari
+# yakhyo/face-anti-spoofing (Apache-2.0).
+MINIFAS_V2 = ModelFile(
+    key="minifas_v2",
+    filename="MiniFASNetV2.onnx",
+    sha256="b32929adc2d9c34b9486f8c4c7bc97c1b69bc0ea9befefc380e4faae4e463907",
+    size=1743581,
+    license="Apache-2.0",
+    source="https://github.com/minivision-ai/Silent-Face-Anti-Spoofing",
+    urls=("https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV2.onnx",),
+)
+
+MINIFAS_V1SE = ModelFile(
+    key="minifas_v1se",
+    filename="MiniFASNetV1SE.onnx",
+    sha256="ebab7f90c7833fbccd46d3a555410e78d969db5438e169b6524be444862b3676",
+    size=1742335,
+    license="Apache-2.0",
+    source="https://github.com/minivision-ai/Silent-Face-Anti-Spoofing",
+    urls=("https://github.com/yakhyo/face-anti-spoofing/releases/download/weights/MiniFASNetV1SE.onnx",),
+)
+
+FACE_MODELS = (YUNET, SFACE)
+LIVENESS_MODELS = (MINIFAS_V2, MINIFAS_V1SE)
+ALL_MODELS = FACE_MODELS + LIVENESS_MODELS
 
 
 class ModelFileError(Exception):

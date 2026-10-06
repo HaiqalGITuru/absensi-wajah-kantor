@@ -15,7 +15,7 @@ di layanan absensi dan batasan database (Tahap 4, BR-05).
 """
 import itertools
 from collections import Counter, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from recognition.matcher import AMBIGUOUS, MATCH, UNKNOWN
 
@@ -45,6 +45,9 @@ class Track:
     last_status: str = PENDING
     last_score: float = 0.0
     last_reason: str = ""
+    # Tahap 4D: skor keaktifan (peluang wajah asli) dan riwayat arah kepala.
+    live_scores: deque = field(default_factory=lambda: deque(maxlen=10))
+    yaw_history: deque = field(default_factory=lambda: deque(maxlen=150))
 
     @property
     def state(self):
@@ -114,7 +117,9 @@ class FaceTracker:
         return matches
 
     def update(self, observations, now):
-        """observations: daftar (box, MatchResult atau None, alasan_kualitas).
+        """observations: daftar (box, MatchResult atau None, alasan_kualitas[, ekstra]).
+
+        ekstra (opsional, Tahap 4D): {"live": skor keaktifan, "yaw": arah kepala}.
 
         MatchResult None berarti wajah terdeteksi tetapi kualitasnya tidak
         layak, sehingga tidak ikut "memilih" identitas.
@@ -124,12 +129,18 @@ class FaceTracker:
         matches = self._associate([o[0] for o in observations])
         events, result_tracks = [], []
 
-        for bi, (box, result, reason) in enumerate(observations):
+        for bi, obs in enumerate(observations):
+            box, result, reason = obs[:3]
+            extras = obs[3] if len(obs) > 3 else {}
             track = matches.get(bi)
             if track is None:
                 track = self._new_track(box, now)
                 self.tracks.append(track)
             track.box, track.last_seen, track.last_reason = box, now, reason or ""
+            if extras.get("yaw") is not None:
+                track.yaw_history.append((now, extras["yaw"]))
+            if extras.get("live") is not None:
+                track.live_scores.append(extras["live"])
 
             if result is not None:
                 vote = (result.status, result.employee_id)

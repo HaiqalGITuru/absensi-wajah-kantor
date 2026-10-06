@@ -30,7 +30,7 @@ def register_kiosk_commands(app):
         from kiosk.state import KioskState
         from kiosk.worker import KioskWorker
         from recognition import identify
-        from recognition.cli import _load_models
+        from recognition.cli import _load_liveness, _load_models
         from recognition.matcher import Matcher
         from services import attendance_service as att
         from services import biometric_service as biometric
@@ -49,6 +49,7 @@ def register_kiosk_commands(app):
         cam = None
         try:
             detector, embedder, quality = _load_models(app)
+            liveness, live_settings = _load_liveness(app)
             people = {}
 
             def matcher_factory():
@@ -76,7 +77,9 @@ def register_kiosk_commands(app):
 
             def show(frame, tracks):
                 header = ["MENCATAT ABSENSI", "Ctrl+C di terminal untuk berhenti"]
-                cv2.imshow(window, identify.annotate(frame, tracks, people, header))
+                gate_state = {"prompts": {}, "pending": set(worker.gate.pending),
+                              "rejected": worker.gate.rejected_tracks}
+                cv2.imshow(window, identify.annotate(frame, tracks, people, header, gate_state))
                 cv2.waitKey(1)
                 return True
 
@@ -87,6 +90,8 @@ def register_kiosk_commands(app):
                 KioskState(app.config["KIOSK_STATE_FILE"]),
                 template_reload_seconds=app.config["TEMPLATE_RELOAD_SECONDS"],
                 on_frame=show if preview else None,
+                liveness=liveness,
+                liveness_settings=live_settings,
             )
 
             stop = {"flag": False}
@@ -97,7 +102,10 @@ def register_kiosk_commands(app):
             signal.signal(signal.SIGINT, request_stop)
             click.secho("Layanan kamera berjalan dan MENCATAT ABSENSI. Buka /kiosk di browser.",
                         fg="green")
-            click.secho("Peringatan: pemeriksaan anti-foto belum aktif (FR-11).", fg="yellow")
+            if live_settings.mode == "off":
+                click.secho("Peringatan: pemeriksaan anti-foto DIMATIKAN (LIVENESS_MODE=off).", fg="yellow")
+            else:
+                click.echo(f"Anti-foto aktif: {live_settings.mode}")
             worker.run(should_stop=lambda: stop["flag"])
         finally:
             if cam is not None:

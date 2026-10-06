@@ -93,6 +93,17 @@ class Config:
     KIOSK_LOCK_FILE = os.getenv("KIOSK_LOCK_FILE", str(BASE_DIR / "instance" / "kiosk.lock"))
     TEMPLATE_RELOAD_SECONDS = float(os.getenv("TEMPLATE_RELOAD_SECONDS", "60"))
 
+    # Anti-foto (Tahap 4D). Mode: off | passive | challenge | passive+challenge.
+    # Ambang masih SEMENTARA dan perlu dikalibrasi di lokasi (PRD 13.2).
+    LIVENESS_MODE = os.getenv("LIVENESS_MODE", "passive+challenge")
+    LIVENESS_REAL_THRESHOLD = float(os.getenv("LIVENESS_REAL_THRESHOLD", "0.7"))
+    LIVENESS_SPOOF_THRESHOLD = float(os.getenv("LIVENESS_SPOOF_THRESHOLD", "0.3"))
+    LIVENESS_MIN_SAMPLES = int(os.getenv("LIVENESS_MIN_SAMPLES", "3"))
+    LIVENESS_DECIDE_SECONDS = float(os.getenv("LIVENESS_DECIDE_SECONDS", "3"))
+    LIVENESS_CHALLENGE_SECONDS = float(os.getenv("LIVENESS_CHALLENGE_SECONDS", "6"))
+    LIVENESS_CHALLENGE_DELTA = float(os.getenv("LIVENESS_CHALLENGE_DELTA", "0.18"))
+    LIVENESS_MIRRORED = os.getenv("LIVENESS_MIRRORED", "false")
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 

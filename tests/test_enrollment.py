@@ -174,6 +174,9 @@ def fake_runtime(monkeypatch):
 
     state = {"frames": _frames("budi")}
     monkeypatch.setattr(cli, "_load_models", lambda app: (FakeDetector(), FakeEmbedder(), QualitySettings()))
+    # Anti-foto diuji terpisah (test_liveness.py); di sini dimatikan.
+    from recognition.liveness import LivenessSettings
+    monkeypatch.setattr(cli, "_load_liveness", lambda app: (None, LivenessSettings(mode="off")))
 
     class _Cam(SequenceCam):
         def release(self):

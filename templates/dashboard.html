@@ -41,11 +41,18 @@
     {{ summary.checked_out_today }} pulang.
     <a href="{{ url_for('kiosk.page') }}" target="_blank" rel="noopener">Buka halaman kios</a>
   </p>
-  <div class="flash flash-info">
-    Pemeriksaan anti-foto (keaktifan wajah) <strong>belum aktif</strong>. Foto atau video wajah
-    karyawan mungkin dapat dikenali. Fitur ini dibuat di Tahap 4D; sampai saat itu, kios
-    sebaiknya diawasi.
+  {% if liveness_mode == 'off' %}
+  <div class="flash flash-error">
+    Pemeriksaan anti-foto (keaktifan wajah) <strong>dimatikan</strong> (LIVENESS_MODE=off).
+    Foto atau video wajah karyawan dapat dikenali sebagai orang asli.
   </div>
+  {% else %}
+  <div class="flash flash-info">
+    Pemeriksaan anti-foto <strong>aktif dalam uji coba</strong> (mode: {{ liveness_mode }}).
+    Tidak ada anti-foto yang sempurna; kios tetap sebaiknya berada di area yang terlihat
+    petugas, dan absensi alternatif tetap disediakan.
+  </div>
+  {% endif %}
 </section>
 
 {% if not key_status.ok %}

@@ -20,8 +20,10 @@ from camera.webcam import CameraError
 from extensions import db
 from kiosk import state as ks
 from recognition.identify import process_frame
+from recognition.liveness import REASON_TEXT, LivenessGate, LivenessSettings
 from recognition.matcher import AMBIGUOUS, UNKNOWN
 from services import attendance_service as att
+from services import audit_service as audit
 from services import biometric_service as biometric
 from tracking.face_tracker import FaceTracker
 
@@ -37,6 +39,10 @@ KIND_BY_ACTION = {
 }
 
 UNKNOWN_MESSAGE = "Wajah tidak dikenali. Coba lagi, atau hubungi admin."
+LIVENESS_REJECT_MESSAGE = (
+    "Wajah tidak dapat dipastikan sebagai orang asli. Absensi BELUM tercatat. "
+    "Coba lagi tanpa kacamata gelap atau hubungi admin."
+)
 AMBIGUOUS_MESSAGE = "Identitas belum dapat dipastikan. Silakan coba lagi."
 
 
@@ -44,7 +50,8 @@ class KioskWorker:
     def __init__(self, app, camera, detector, embedder, quality, matcher_factory,
                  tracker_settings, attendance_settings, state_store,
                  template_reload_seconds=60.0, reopen_seconds=5.0,
-                 clock=time.monotonic, wall_clock=time.time, on_frame=None):
+                 clock=time.monotonic, wall_clock=time.time, on_frame=None,
+                 liveness=None, liveness_settings=None):
         self.app = app
         self.camera = camera
         self.detector = detector
@@ -59,6 +66,11 @@ class KioskWorker:
         self.clock = clock
         self.wall_clock = wall_clock
         self.on_frame = on_frame
+        # Tahap 4D: anti-foto. Tanpa pengaturan, gerbang dalam mode "off".
+        self.liveness = liveness
+        self.liveness_settings = liveness_settings or LivenessSettings(mode="off")
+        self.gate = LivenessGate(self.liveness_settings)
+        self.liveness_rejected = 0
 
         self.matcher = None
         self._loaded_at = -1e9
@@ -120,7 +132,7 @@ class KioskWorker:
             "hint": self.hint,
             "employees": self.matcher.employee_count if self.matcher else 0,
             "recorded": self.recorded,
-            "liveness": False,  # FR-11 belum aktif (Tahap 4D)
+            "liveness": self.liveness_settings.mode,
         }, clock=self.wall_clock)
         if not ok:
             self.publish_skipped += 1
@@ -142,6 +154,25 @@ class KioskWorker:
         log.info("Absensi karyawan id=%s: %s", decision.employee_id, decision.action)
         return decision
 
+    def handle_rejection(self, event, reason):
+        """Identitas cocok tetapi keaktifan wajah gagal: TIDAK ada absensi."""
+        from models import Employee
+
+        self.liveness_rejected += 1
+        self._say("warning", LIVENESS_REJECT_MESSAGE)
+        employee = db.session.get(Employee, event.employee_id)
+        code = employee.employee_code if employee else f"id={event.employee_id}"
+        audit.log_event(
+            audit.LIVENESS_REJECTED,
+            entity_type="employee",
+            entity_id=event.employee_id,
+            description=(
+                f"Absensi {code} ditolak oleh pemeriksaan anti-foto: {REASON_TEXT[reason]} "
+                f"(skor kecocokan wajah {event.score})."
+            ),
+        )
+        log.warning("Anti-foto menolak karyawan id=%s: %s", event.employee_id, reason)
+
     def step(self, frame):
         """Memproses satu frame. Mengembalikan daftar jejak (untuk pratinjau)."""
         if self.matcher is None or self.matcher.template_count == 0:
@@ -150,12 +181,19 @@ class KioskWorker:
                 self.detail = "Belum ada wajah karyawan yang terdaftar."
             return []
 
+        now = self.clock()
         tracks, events, _ = process_frame(
             frame, self.detector, self.embedder, self.matcher, self.quality,
-            self.tracker, self.clock(),
+            self.tracker, now, liveness=self.liveness,
         )
-        for event in events:
+        # Absensi hanya untuk peristiwa yang lolos pemeriksaan keaktifan (FR-11).
+        gate = self.gate.update({t.id: t for t in self.tracker.tracks}, events, now)
+        for event, reason in gate.rejected:
+            self.handle_rejection(event, reason)
+        for event in gate.accepted:
             self.handle_event(event)
+        for instruction in gate.prompts.values():
+            self._say("info", instruction)
 
         self.hint = None
         for track in tracks:
