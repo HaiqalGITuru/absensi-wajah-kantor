@@ -24,6 +24,30 @@
   </a>
 </section>
 
+<section class="card kiosk-card" aria-labelledby="kiosk-title">
+  <h2 class="card-title" id="kiosk-title">Layanan kamera kios</h2>
+  {% if kiosk_status.online %}
+    {% if kiosk_status.camera == 'ok' %}
+    <p><span class="badge badge-ok">Berjalan</span> Kamera aktif, {{ kiosk_status.employees }} karyawan dapat dikenali.</p>
+    {% else %}
+    <p><span class="badge badge-off">Kamera bermasalah</span> {{ kiosk_status.detail }}</p>
+    {% endif %}
+  {% else %}
+    <p><span class="badge badge-off">Tidak berjalan</span> {{ kiosk_status.detail }}
+       Jalankan <code>flask --app app kiosk-run</code> di komputer kios.</p>
+  {% endif %}
+  <p class="muted">
+    Hari ini: {{ summary.checked_in_today }} masuk ({{ summary.late_today }} terlambat),
+    {{ summary.checked_out_today }} pulang.
+    <a href="{{ url_for('kiosk.page') }}" target="_blank" rel="noopener">Buka halaman kios</a>
+  </p>
+  <div class="flash flash-info">
+    Pemeriksaan anti-foto (keaktifan wajah) <strong>belum aktif</strong>. Foto atau video wajah
+    karyawan mungkin dapat dikenali. Fitur ini dibuat di Tahap 4D; sampai saat itu, kios
+    sebaiknya diawasi.
+  </div>
+</section>
+
 {% if not key_status.ok %}
 <div class="flash flash-error" role="alert">
   Kunci enkripsi templat wajah belum siap: {{ key_status.message }}

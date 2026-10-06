@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Absensi Kehadiran — Diskominfo Tabalong</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/kiosk.css') }}">
+</head>
+<body>
+  <main class="kiosk" data-status-url="{{ url_for('kiosk.status') }}">
+    <header class="kiosk-head">
+      <p class="kiosk-org">Dinas Komunikasi dan Informatika Kabupaten Tabalong</p>
+      <h1 class="kiosk-title">Absensi Kehadiran</h1>
+    </header>
+
+    <section class="kiosk-clock" aria-label="Waktu server">
+      <p id="clock" class="clock">--:--:--</p>
+      <p id="date" class="date">&nbsp;</p>
+    </section>
+
+    <section id="panel" class="panel panel-idle" role="status" aria-live="polite">
+      <p id="message" class="panel-message">Menghubungkan ke layanan kamera…</p>
+      <p id="hint" class="panel-hint" hidden></p>
+    </section>
+
+    <footer class="kiosk-foot">
+      <span id="camera-dot" class="dot dot-off" aria-hidden="true"></span>
+      <span id="camera-text">Memeriksa kamera…</span>
+    </footer>
+  </main>
+  <script src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
+</body>
+</html>

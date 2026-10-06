@@ -18,6 +18,9 @@ Pemeriksaan kamera:
     flask --app app camera-scan           (mencari webcam yang terpasang)
     flask --app app camera-check          (uji stabilitas dan pencahayaan)
 
+Layanan kamera kios (MENCATAT ABSENSI), jalankan di terminal terpisah:
+    flask --app app kiosk-run
+
 Simulasi aturan absensi (tanpa menyimpan):
     flask --app app attendance-simulate --employee KODE --at "2026-10-07 07:45"
 
@@ -39,6 +42,8 @@ from models import User, office_now
 from routes.auth import bp as auth_bp
 from routes.employees import bp as employees_bp
 from routes.schedules import bp as schedules_bp
+from routes.kiosk import bp as kiosk_bp
+from kiosk.cli import register_kiosk_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
 from recognition.cli import register_recognition_commands
@@ -407,9 +412,11 @@ def create_app(config_name=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(employees_bp)
     app.register_blueprint(schedules_bp)
+    app.register_blueprint(kiosk_bp)
     register_commands(app)
     register_recognition_commands(app)
     register_attendance_commands(app)
+    register_kiosk_commands(app)
 
     @app.after_request
     def security_headers(response):

@@ -88,6 +88,11 @@ class Config:
     CHECKOUT_GRACE_HOURS = int(os.getenv("CHECKOUT_GRACE_HOURS", "6"))
     CHECKOUT_UPDATE_LATER = os.getenv("CHECKOUT_UPDATE_LATER", "true")
 
+    # Kios (Tahap 4B). File status dan kunci layanan kamera (folder instance).
+    KIOSK_STATE_FILE = os.getenv("KIOSK_STATE_FILE", str(BASE_DIR / "instance" / "kiosk_state.json"))
+    KIOSK_LOCK_FILE = os.getenv("KIOSK_LOCK_FILE", str(BASE_DIR / "instance" / "kiosk.lock"))
+    TEMPLATE_RELOAD_SECONDS = float(os.getenv("TEMPLATE_RELOAD_SECONDS", "60"))
+
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 

@@ -3,12 +3,13 @@ Autentikasi admin (FR-01): login, logout, dan halaman utama admin.
 """
 from urllib.parse import urlsplit
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from extensions import db, login_manager
-from models import AuditLog, User
+from models import AttendanceSession, AuditLog, User, office_now
+from kiosk.state import KioskState, admin_view
 from services import audit_service as audit
 from services import biometric_service, employee_service, schedule_service
 
@@ -124,9 +125,25 @@ def dashboard():
         "employees_with_face": biometric_service.count_employees_with_templates(),
     }
     key_status = biometric_service.keyring_status()
+    today = office_now().date()
+    summary["checked_in_today"] = db.session.execute(
+        db.select(db.func.count(AttendanceSession.id)).where(
+            AttendanceSession.work_date == today, AttendanceSession.check_in_at.is_not(None))
+    ).scalar_one()
+    summary["late_today"] = db.session.execute(
+        db.select(db.func.count(AttendanceSession.id)).where(
+            AttendanceSession.work_date == today,
+            AttendanceSession.status == AttendanceSession.STATUS_LATE)
+    ).scalar_one()
+    summary["checked_out_today"] = db.session.execute(
+        db.select(db.func.count(AttendanceSession.id)).where(
+            AttendanceSession.work_date == today, AttendanceSession.check_out_at.is_not(None))
+    ).scalar_one()
+    kiosk_status = admin_view(KioskState(current_app.config["KIOSK_STATE_FILE"]).read())
     return render_template(
         "dashboard.html",
         recent_logs=recent_logs,
         summary=summary,
         key_status=key_status,
+        kiosk_status=kiosk_status,
     )

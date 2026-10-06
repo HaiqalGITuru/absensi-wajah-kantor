@@ -65,6 +65,7 @@ class TrackEvent:
     employee_id: int
     seconds_to_confirm: float
     in_cooldown: bool
+    score: float = None  # skor kecocokan terakhir saat identitas dipastikan
 
 
 @dataclass
@@ -162,6 +163,7 @@ class FaceTracker:
                                 self._last_confirmed[emp] = now
                             events.append(TrackEvent(
                                 track.id, emp, round(now - track.first_seen, 2), in_cooldown,
+                                round(track.last_score, 3),
                             ))
             result_tracks.append(track)
         return result_tracks, events
