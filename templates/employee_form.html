@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Ubah karyawan' if employee else 'Tambah karyawan' }}{% endblock %}
+{% block page_class %}page-medium{% endblock %}
+
+{% macro field_error(name) %}
+  {% if errors.get(name) %}<p class="field-error" id="{{ name }}-error">{{ errors[name] }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<p class="breadcrumb"><a href="{{ url_for('employees.list_employees') }}">Karyawan</a></p>
+<h1>{{ 'Ubah data ' ~ employee.employee_code if employee else 'Tambah karyawan' }}</h1>
+
+{% if errors %}
+<div class="flash flash-error" role="alert">Periksa kembali isian yang ditandai.</div>
+{% endif %}
+
+{% if not schedules %}
+<div class="flash flash-info">
+  Belum ada jadwal kerja aktif. <a href="{{ url_for('schedules.create') }}">Buat jadwal kerja</a> terlebih dahulu.
+</div>
+{% endif %}
+
+<section class="card">
+  <form method="post" class="form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="employee_code">Kode karyawan</label>
+    <input id="employee_code" name="employee_code" type="text" required maxlength="30"
+           value="{{ values.get('employee_code', '') }}"
+           {% if errors.get('employee_code') %}aria-invalid="true" aria-describedby="employee_code-error"{% endif %}>
+    <p class="hint">Contoh: NIP atau kode internal. Disimpan dalam huruf besar.</p>
+    {{ field_error('employee_code') }}
+
+    <label for="full_name">Nama lengkap</label>
+    <input id="full_name" name="full_name" type="text" required maxlength="150"
+           value="{{ values.get('full_name', '') }}"
+           {% if errors.get('full_name') %}aria-invalid="true" aria-describedby="full_name-error"{% endif %}>
+    {{ field_error('full_name') }}
+
+    <label for="department">Departemen / bidang</label>
+    <input id="department" name="department" type="text" required maxlength="100"
+           list="department-options" value="{{ values.get('department', '') }}"
+           {% if errors.get('department') %}aria-invalid="true" aria-describedby="department-error"{% endif %}>
+    <datalist id="department-options">
+      {% for d in departments %}<option value="{{ d }}">{% endfor %}
+    </datalist>
+    <p class="hint">Pilih dari daftar atau ketik nama bidang baru.</p>
+    {{ field_error('department') }}
+
+    <label for="work_schedule_id">Jadwal kerja</label>
+    <select id="work_schedule_id" name="work_schedule_id" required
+            {% if errors.get('work_schedule_id') %}aria-invalid="true" aria-describedby="work_schedule_id-error"{% endif %}>
+      <option value="">Pilih jadwal</option>
+      {% for s in schedules %}
+      <option value="{{ s.id }}" {% if values.get('work_schedule_id') == s.id|string %}selected{% endif %}>
+        {{ s.name }} ({{ summarize_days(s)|join('; ') }})
+      </option>
+      {% endfor %}
+    </select>
+    {{ field_error('work_schedule_id') }}
+
+    <div class="form-actions">
+      <button type="submit" class="btn">{{ 'Simpan perubahan' if employee else 'Tambah karyawan' }}</button>
+      <a href="{{ url_for('employees.list_employees') }}">Batal</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

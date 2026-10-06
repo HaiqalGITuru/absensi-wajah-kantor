@@ -50,6 +50,7 @@ def test_semua_tabel_terbentuk(app):
         "employees",
         "face_templates",
         "work_schedules",
+        "work_schedule_days",
         "attendance_sessions",
         "audit_logs",
     }

@@ -59,22 +59,73 @@ class User(UserMixin, TimestampMixin, db.Model):
         return f"<User {self.username}>"
 
 
+# Urutan hari mengikuti datetime.weekday(): 0 = Senin ... 6 = Minggu.
+WEEKDAY_NAMES = ("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
+
+
 class WorkSchedule(TimestampMixin, db.Model):
-    """Jadwal kerja (PRD 8.4)."""
+    """Jadwal kerja (PRD 8.4).
+
+    Jam masuk dan pulang disimpan per hari di WorkScheduleDay. Hari yang tidak
+    punya baris WorkScheduleDay dianggap hari libur untuk jadwal ini.
+    """
 
     __tablename__ = "work_schedules"
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    start_time = db.Column(db.Time, nullable=False)
-    end_time = db.Column(db.Time, nullable=False)
     late_tolerance_minutes = db.Column(db.Integer, nullable=False, default=0)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     employees = db.relationship("Employee", back_populates="work_schedule")
+    days = db.relationship(
+        "WorkScheduleDay",
+        back_populates="work_schedule",
+        order_by="WorkScheduleDay.weekday",
+        cascade="all, delete-orphan",
+    )
+
+    def day_for(self, weekday):
+        """Aturan jam untuk hari tertentu (0 = Senin), atau None jika libur."""
+        for day in self.days:
+            if day.weekday == weekday:
+                return day
+        return None
 
     def __repr__(self):
         return f"<WorkSchedule {self.name}>"
+
+
+class WorkScheduleDay(TimestampMixin, db.Model):
+    """Jam masuk dan pulang untuk satu hari dalam sebuah jadwal kerja."""
+
+    __tablename__ = "work_schedule_days"
+    __table_args__ = (
+        db.UniqueConstraint("work_schedule_id", "weekday"),
+        db.CheckConstraint("weekday >= 0 AND weekday <= 6", name="weekday_range"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    work_schedule_id = db.Column(
+        db.Integer, db.ForeignKey("work_schedules.id"), nullable=False
+    )
+    weekday = db.Column(db.SmallInteger, nullable=False)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+
+    work_schedule = db.relationship("WorkSchedule", back_populates="days")
+
+    @property
+    def weekday_name(self):
+        return WEEKDAY_NAMES[self.weekday]
+
+    @property
+    def crosses_midnight(self):
+        """True jika jam pulang lebih awal dari jam masuk (shift malam)."""
+        return self.end_time < self.start_time
+
+    def __repr__(self):
+        return f"<WorkScheduleDay {self.work_schedule_id} {self.weekday_name}>"
 
 
 class Employee(TimestampMixin, db.Model):

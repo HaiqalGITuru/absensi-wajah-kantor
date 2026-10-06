@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Ubah jadwal' if schedule else 'Tambah jadwal' }}{% endblock %}
+{% block page_class %}page-medium{% endblock %}
+
+{% macro field_error(name) %}
+  {% if errors.get(name) %}<p class="field-error" id="{{ name }}-error">{{ errors[name] }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<p class="breadcrumb"><a href="{{ url_for('schedules.list_schedules') }}">Jadwal kerja</a></p>
+<h1>{{ 'Ubah jadwal ' ~ schedule.name if schedule else 'Tambah jadwal kerja' }}</h1>
+
+{% if errors %}
+<div class="flash flash-error" role="alert">Periksa kembali isian yang ditandai.</div>
+{% endif %}
+
+<section class="card">
+  <form method="post" class="form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="name">Nama jadwal</label>
+    <input id="name" name="name" type="text" required maxlength="100"
+           value="{{ values.get('name', '') }}"
+           {% if errors.get('name') %}aria-invalid="true" aria-describedby="name-error"{% endif %}>
+    <p class="hint">Contoh: Jam Kerja Kantor, atau Shift Piket.</p>
+    {{ field_error('name') }}
+
+    <fieldset class="days">
+      <legend>Hari dan jam kerja</legend>
+      <p class="hint">Centang hari kerja. Hari yang tidak dicentang dianggap libur.</p>
+
+      <div class="days-grid" role="group">
+        <span class="days-head">Hari</span>
+        <span class="days-head">Jam masuk</span>
+        <span class="days-head">Jam pulang</span>
+
+        {% for name in weekday_names %}
+        {% set w = loop.index0 %}
+        {% set on = values.get('day_' ~ w ~ '_on') %}
+        <label class="day-toggle" for="day_{{ w }}_on">
+          <input type="checkbox" id="day_{{ w }}_on" name="day_{{ w }}_on" value="1"
+                 data-day="{{ w }}" {% if on %}checked{% endif %}>
+          {{ name }}
+        </label>
+        <input type="time" name="day_{{ w }}_start" aria-label="Jam masuk {{ name }}"
+               data-day="{{ w }}" data-role="start"
+               value="{{ values.get('day_' ~ w ~ '_start', '') }}"
+               {% if errors.get('day_' ~ w) %}aria-invalid="true"{% endif %}
+               {% if not on %}disabled{% endif %}>
+        <input type="time" name="day_{{ w }}_end" aria-label="Jam pulang {{ name }}"
+               data-day="{{ w }}" data-role="end"
+               value="{{ values.get('day_' ~ w ~ '_end', '') }}"
+               {% if errors.get('day_' ~ w) %}aria-invalid="true"{% endif %}
+               {% if not on %}disabled{% endif %}>
+        {% if errors.get('day_' ~ w) %}
+        <p class="field-error days-error">{{ errors['day_' ~ w] }}</p>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      <button type="button" class="btn-link" id="copy-monday">
+        Salin jam Senin ke semua hari kerja yang dicentang
+      </button>
+      {{ field_error('days') }}
+      <p class="hint">Jika jam pulang lebih awal dari jam masuk, hari itu dianggap shift lintas tengah malam.</p>
+    </fieldset>
+
+    <label for="late_tolerance_minutes">Toleransi terlambat (menit)</label>
+    <input id="late_tolerance_minutes" name="late_tolerance_minutes" type="number"
+           min="0" max="{{ max_tolerance }}" step="1" required
+           value="{{ values.get('late_tolerance_minutes', '0') }}"
+           {% if errors.get('late_tolerance_minutes') %}aria-invalid="true" aria-describedby="late_tolerance_minutes-error"{% endif %}>
+    <p class="hint">Berlaku untuk semua hari dalam jadwal ini.</p>
+    {{ field_error('late_tolerance_minutes') }}
+
+    {% if schedule %}
+    <p class="hint">Perubahan berlaku untuk absensi berikutnya. Catatan absensi yang sudah tersimpan tidak diubah.</p>
+    {% endif %}
+
+    <div class="form-actions">
+      <button type="submit" class="btn">{{ 'Simpan perubahan' if schedule else 'Tambah jadwal' }}</button>
+      <a href="{{ url_for('schedules.list_schedules') }}">Batal</a>
+    </div>
+  </form>
+</section>
+
+<script>
+  // Kolom jam hanya aktif untuk hari yang dicentang.
+  document.querySelectorAll('.day-toggle input[type="checkbox"]').forEach(function (box) {
+    box.addEventListener('change', function () {
+      document.querySelectorAll('input[type="time"][data-day="' + box.dataset.day + '"]')
+        .forEach(function (input) { input.disabled = !box.checked; });
+    });
+  });
+
+  document.getElementById('copy-monday').addEventListener('click', function () {
+    var start = document.querySelector('input[data-day="0"][data-role="start"]').value;
+    var end = document.querySelector('input[data-day="0"][data-role="end"]').value;
+    for (var w = 1; w < 7; w++) {
+      if (!document.getElementById('day_' + w + '_on').checked) continue;
+      document.querySelector('input[data-day="' + w + '"][data-role="start"]').value = start;
+      document.querySelector('input[data-day="' + w + '"][data-role="end"]').value = end;
+    }
+  });
+</script>
+{% endblock %}

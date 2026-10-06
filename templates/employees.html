@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Karyawan{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Karyawan</h1>
+  <a class="btn" href="{{ url_for('employees.create') }}">Tambah karyawan</a>
+</div>
+
+<form method="get" class="filters" role="search">
+  <div class="field">
+    <label for="q">Cari kode atau nama</label>
+    <input id="q" name="q" type="search" value="{{ q }}" maxlength="100">
+  </div>
+  <div class="field">
+    <label for="department">Departemen</label>
+    <select id="department" name="department">
+      <option value="">Semua departemen</option>
+      {% for d in departments %}
+      <option value="{{ d }}" {% if d == department %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      {% for value, label in status_options.items() %}
+      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field field-actions">
+    <button type="submit" class="btn">Terapkan</button>
+    <a class="link-reset" href="{{ url_for('employees.list_employees') }}">Reset</a>
+  </div>
+</form>
+
+<p class="muted result-count">{{ pagination.total }} karyawan ditemukan.</p>
+
+{% if pagination.items %}
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Kode</th>
+          <th scope="col">Nama lengkap</th>
+          <th scope="col">Departemen</th>
+          <th scope="col">Jadwal</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="visually-hidden">Tindakan</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in pagination.items %}
+        <tr>
+          <td class="nowrap"><code>{{ e.employee_code }}</code></td>
+          <td>{{ e.full_name }}</td>
+          <td>{{ e.department }}</td>
+          <td class="nowrap">{{ e.work_schedule.name if e.work_schedule else '–' }}</td>
+          <td>
+            {% if e.is_active %}
+            <span class="badge badge-ok">Aktif</span>
+            {% else %}
+            <span class="badge badge-off">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+            <a href="{{ url_for('employees.edit', employee_id=e.id) }}">Ubah</a>
+            {% if e.is_active %}
+            <form method="post" action="{{ url_for('employees.deactivate', employee_id=e.id) }}"
+                  onsubmit='return confirm({{ ("Nonaktifkan " ~ e.full_name ~ "? Karyawan nonaktif tidak bisa melakukan absensi baru.")|tojson }});'>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_to" value="{{ request.full_path }}">
+              <button type="submit" class="btn-link btn-link-danger">Nonaktifkan</button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('employees.activate', employee_id=e.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="return_to" value="{{ request.full_path }}">
+              <button type="submit" class="btn-link">Aktifkan</button>
+            </form>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav class="pagination" aria-label="Halaman">
+  {% if pagination.has_prev %}
+  <a href="{{ url_for('employees.list_employees', q=q, department=department, status=status, page=pagination.prev_num) }}">Sebelumnya</a>
+  {% endif %}
+  <span>Halaman {{ pagination.page }} dari {{ pagination.pages }}</span>
+  {% if pagination.has_next %}
+  <a href="{{ url_for('employees.list_employees', q=q, department=department, status=status, page=pagination.next_num) }}">Berikutnya</a>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="card empty">
+  {% if q or department or status != 'active' %}
+  <p>Tidak ada karyawan yang cocok dengan filter ini.</p>
+  <a href="{{ url_for('employees.list_employees') }}">Tampilkan semua karyawan aktif</a>
+  {% else %}
+  <p>Belum ada karyawan terdaftar.</p>
+  <a class="btn" href="{{ url_for('employees.create') }}">Tambah karyawan pertama</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

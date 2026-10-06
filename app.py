@@ -22,6 +22,8 @@ from config import get_config
 from extensions import csrf, db, login_manager, migrate
 from models import User, office_now
 from routes.auth import bp as auth_bp
+from routes.employees import bp as employees_bp
+from routes.schedules import bp as schedules_bp
 from services import audit_service as audit
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,50}$")
@@ -101,6 +103,8 @@ def create_app(config_name=None):
     csrf.init_app(app)
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(employees_bp)
+    app.register_blueprint(schedules_bp)
     register_commands(app)
 
     @app.after_request

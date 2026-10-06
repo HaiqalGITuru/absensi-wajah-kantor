@@ -13,6 +13,14 @@
         Absensi Wajah <span class="brand-sub">Admin</span>
       </a>
       {% if current_user.is_authenticated %}
+      <nav class="mainnav" aria-label="Menu admin">
+        <a href="{{ url_for('auth.dashboard') }}"
+           {% if request.endpoint == 'auth.dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+        <a href="{{ url_for('employees.list_employees') }}"
+           {% if request.blueprint == 'employees' %}aria-current="page"{% endif %}>Karyawan</a>
+        <a href="{{ url_for('schedules.list_schedules') }}"
+           {% if request.blueprint == 'schedules' %}aria-current="page"{% endif %}>Jadwal kerja</a>
+      </nav>
       <div class="user-area">
         <span class="user-name">{{ current_user.name }}</span>
         <form method="post" action="{{ url_for('auth.logout') }}">

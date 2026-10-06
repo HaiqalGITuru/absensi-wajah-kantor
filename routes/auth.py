@@ -10,6 +10,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from extensions import db, login_manager
 from models import AuditLog, User
 from services import audit_service as audit
+from services import employee_service, schedule_service
 
 bp = Blueprint("auth", __name__)
 
@@ -116,4 +117,11 @@ def dashboard():
     recent_logs = db.session.execute(
         db.select(AuditLog).order_by(AuditLog.id.desc()).limit(10)
     ).scalars().all()
-    return render_template("dashboard.html", recent_logs=recent_logs)
+    summary = {
+        "active_employees": employee_service.count_employees(active=True),
+        "inactive_employees": employee_service.count_employees(active=False),
+        "active_schedules": len(schedule_service.active_schedules()),
+    }
+    return render_template(
+        "dashboard.html", recent_logs=recent_logs, summary=summary
+    )

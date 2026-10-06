@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Jadwal kerja{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Jadwal kerja</h1>
+  <a class="btn" href="{{ url_for('schedules.create') }}">Tambah jadwal</a>
+</div>
+<p class="muted">
+  Penetapan terlambat mengikuti jam masuk hari itu ditambah toleransi pada jadwal (BR-09),
+  bukan ditentukan oleh model AI.
+</p>
+
+{% if schedules %}
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Nama</th>
+          <th scope="col">Hari dan jam kerja</th>
+          <th scope="col">Toleransi</th>
+          <th scope="col">Karyawan aktif</th>
+          <th scope="col">Status</th>
+          <th scope="col"><span class="visually-hidden">Tindakan</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in schedules %}
+        <tr>
+          <td>
+            {{ s.name }}
+            {% if crosses_midnight(s) %}<span class="badge badge-info">Lintas tengah malam</span>{% endif %}
+          </td>
+          <td>
+            {% for line in summarize_days(s) %}<div class="nowrap">{{ line }}</div>{% endfor %}
+          </td>
+          <td class="nowrap">{{ s.late_tolerance_minutes }} menit</td>
+          <td>{{ usage[s.id] }}</td>
+          <td>
+            {% if s.is_active %}
+            <span class="badge badge-ok">Aktif</span>
+            {% else %}
+            <span class="badge badge-off">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="row-actions">
+            <a href="{{ url_for('schedules.edit', schedule_id=s.id) }}">Ubah</a>
+            {% if s.is_active %}
+            <form method="post" action="{{ url_for('schedules.deactivate', schedule_id=s.id) }}"
+                  onsubmit='return confirm({{ ("Nonaktifkan jadwal " ~ s.name ~ "?")|tojson }});'>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn-link btn-link-danger">Nonaktifkan</button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('schedules.activate', schedule_id=s.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn-link">Aktifkan</button>
+            </form>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card empty">
+  <p>Belum ada jadwal kerja. Karyawan baru bisa ditambahkan setelah ada jadwal aktif.</p>
+  <a class="btn" href="{{ url_for('schedules.create') }}">Tambah jadwal pertama</a>
+</div>
+{% endif %}
+{% endblock %}

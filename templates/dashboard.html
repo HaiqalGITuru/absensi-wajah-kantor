@@ -3,10 +3,29 @@
 
 {% block content %}
 <h1>Halo, {{ current_user.name }}</h1>
-<p class="muted">
-  Menu pengelolaan karyawan dan jadwal kerja ditambahkan di Tahap 2B.
-  Statistik kehadiran lengkap dibuat di Tahap 5.
-</p>
+<p class="muted">Statistik kehadiran harian ditambahkan di Tahap 5.</p>
+
+<section class="summary" aria-label="Ringkasan data">
+  <a class="summary-item" href="{{ url_for('employees.list_employees') }}">
+    <span class="summary-value">{{ summary.active_employees }}</span>
+    <span class="summary-label">Karyawan aktif</span>
+  </a>
+  <a class="summary-item" href="{{ url_for('employees.list_employees', status='inactive') }}">
+    <span class="summary-value">{{ summary.inactive_employees }}</span>
+    <span class="summary-label">Karyawan nonaktif</span>
+  </a>
+  <a class="summary-item" href="{{ url_for('schedules.list_schedules') }}">
+    <span class="summary-value">{{ summary.active_schedules }}</span>
+    <span class="summary-label">Jadwal kerja aktif</span>
+  </a>
+</section>
+
+{% if summary.active_schedules == 0 %}
+<div class="flash flash-info">
+  Belum ada jadwal kerja aktif. Buat jadwal terlebih dahulu sebelum menambahkan karyawan.
+  <a href="{{ url_for('schedules.create') }}">Tambah jadwal kerja</a>
+</div>
+{% endif %}
 
 <section class="card">
   <h2 class="card-title">Aktivitas terbaru</h2>

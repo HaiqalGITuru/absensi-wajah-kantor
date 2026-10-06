@@ -16,7 +16,32 @@ LOGIN_FAILED = "login_failed"
 LOGOUT = "logout"
 ADMIN_CREATED = "admin_created"
 
+EMPLOYEE_CREATED = "employee_created"
+EMPLOYEE_UPDATED = "employee_updated"
+EMPLOYEE_DEACTIVATED = "employee_deactivated"
+EMPLOYEE_ACTIVATED = "employee_activated"
+
+SCHEDULE_CREATED = "schedule_created"
+SCHEDULE_UPDATED = "schedule_updated"
+SCHEDULE_DEACTIVATED = "schedule_deactivated"
+SCHEDULE_ACTIVATED = "schedule_activated"
+
 MAX_DESCRIPTION_LENGTH = 1000
+
+
+def describe_changes(before, after, labels=None):
+    """Menyusun teks perubahan, mis. "Nama: 'A' -> 'B'; Departemen: 'X' -> 'Y'".
+
+    Mengembalikan string kosong jika tidak ada yang berubah.
+    """
+    labels = labels or {}
+    parts = []
+    for key, old in before.items():
+        new = after.get(key)
+        if old != new:
+            label = labels.get(key, key)
+            parts.append(f"{label}: '{old}' -> '{new}'")
+    return "; ".join(parts)
 
 
 def log_event(
@@ -32,7 +57,8 @@ def log_event(
 
     commit=True  : langsung disimpan (untuk kejadian berdiri sendiri, mis. login).
     commit=False : hanya ditambahkan ke sesi, disimpan bersama perubahan data
-                   lain dalam satu transaksi (dipakai di Tahap 2B dan seterusnya).
+                   lain dalam satu transaksi, sehingga data dan catatan auditnya
+                   selalu tersimpan bersamaan atau gagal bersamaan.
     """
     if has_request_context() and request.remote_addr:
         ip_note = f"[IP {request.remote_addr}]"
