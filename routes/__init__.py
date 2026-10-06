@@ -1,0 +1,1 @@
+"""Blueprint route aplikasi web."""

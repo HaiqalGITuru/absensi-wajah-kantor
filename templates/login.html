@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block page_class %}page-narrow{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h1 class="card-title">Login admin</h1>
+  <p class="muted">Halaman ini khusus pengelola sistem absensi.</p>
+
+  <form method="post" class="form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" required maxlength="50"
+           autocomplete="username" autofocus value="{{ username or '' }}">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required
+           autocomplete="current-password">
+
+    <button type="submit" class="btn">Masuk</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin{% endblock %} — Absensi Wajah Diskominfo Tabalong</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('auth.dashboard') if current_user.is_authenticated else url_for('auth.login') }}">
+        Absensi Wajah <span class="brand-sub">Admin</span>
+      </a>
+      {% if current_user.is_authenticated %}
+      <div class="user-area">
+        <span class="user-name">{{ current_user.name }}</span>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-secondary">Keluar</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="page {% block page_class %}{% endblock %}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

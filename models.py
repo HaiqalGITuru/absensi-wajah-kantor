@@ -9,6 +9,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from flask import current_app, has_app_context
+from flask_login import UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from extensions import db
 
@@ -30,8 +32,11 @@ class TimestampMixin:
     )
 
 
-class User(TimestampMixin, db.Model):
-    """Akun admin (PRD 8.1)."""
+class User(UserMixin, TimestampMixin, db.Model):
+    """Akun admin (PRD 8.1).
+
+    Password tidak pernah disimpan dalam bentuk asli, hanya hash-nya.
+    """
 
     __tablename__ = "users"
 
@@ -41,6 +46,14 @@ class User(TimestampMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="admin")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
         return f"<User {self.username}>"

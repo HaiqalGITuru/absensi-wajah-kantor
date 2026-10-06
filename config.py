@@ -52,6 +52,9 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
+    # Token CSRF berlaku 1 jam (detik)
+    WTF_CSRF_TIME_LIMIT = 3600
+
     DEBUG = False
     TESTING = False
 
@@ -70,6 +73,9 @@ class TestingConfig(Config):
     # Pengujian memakai SQLite di memori agar tidak menyentuh data MySQL.
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     SQLALCHEMY_ENGINE_OPTIONS = {}
+    # CSRF dimatikan agar tes formulir sederhana; ada tes khusus yang
+    # menyalakannya kembali untuk memastikan perlindungan CSRF bekerja.
+    WTF_CSRF_ENABLED = False
 
 
 CONFIGS = {

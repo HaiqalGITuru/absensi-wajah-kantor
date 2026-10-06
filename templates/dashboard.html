@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>Halo, {{ current_user.name }}</h1>
+<p class="muted">
+  Menu pengelolaan karyawan dan jadwal kerja ditambahkan di Tahap 2B.
+  Statistik kehadiran lengkap dibuat di Tahap 5.
+</p>
+
+<section class="card">
+  <h2 class="card-title">Aktivitas terbaru</h2>
+  {% if recent_logs %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Waktu</th>
+          <th scope="col">Aksi</th>
+          <th scope="col">Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td class="nowrap">{{ log.created_at.strftime('%d-%m-%Y %H:%M:%S') }}</td>
+          <td><code>{{ log.action }}</code></td>
+          <td>{{ log.description or '–' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Belum ada aktivitas yang tercatat.</p>
+  {% endif %}
+</section>
+{% endblock %}
