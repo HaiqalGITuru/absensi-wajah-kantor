@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistem Absensi Wajah — Diskominfo Tabalong</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <p class="org">Dinas Komunikasi dan Informatika Kabupaten Tabalong</p>
+      <h1>Sistem Absensi Wajah</h1>
+      <p class="lead">Tahap 1: fondasi aplikasi dan database.</p>
+    </header>
+
+    <section class="status" aria-labelledby="status-title">
+      <h2 id="status-title">Status layanan</h2>
+      <dl class="status-list">
+        <div class="status-row">
+          <dt>Aplikasi</dt>
+          <dd id="status-app" data-state="loading">Memeriksa…</dd>
+        </div>
+        <div class="status-row">
+          <dt>Database</dt>
+          <dd id="status-db" data-state="loading">Memeriksa…</dd>
+        </div>
+        <div class="status-row">
+          <dt>Waktu server</dt>
+          <dd id="status-time">–</dd>
+        </div>
+      </dl>
+      <button type="button" id="refresh-btn" class="btn">Periksa ulang</button>
+    </section>
+  </main>
+
+  <script>
+    const labels = { ok: "Berjalan normal", error: "Tidak terhubung" };
+
+    function setState(el, state) {
+      el.dataset.state = state;
+      el.textContent = labels[state] || state;
+    }
+
+    async function checkHealth() {
+      const appEl = document.getElementById("status-app");
+      const dbEl = document.getElementById("status-db");
+      const timeEl = document.getElementById("status-time");
+      try {
+        const res = await fetch("/health", { cache: "no-store" });
+        const data = await res.json();
+        setState(appEl, data.app);
+        setState(dbEl, data.database);
+        timeEl.textContent = data.server_time.replace("T", " ") + " (" + data.timezone + ")";
+      } catch (err) {
+        setState(appEl, "error");
+        setState(dbEl, "error");
+        timeEl.textContent = "–";
+      }
+    }
+
+    document.getElementById("refresh-btn").addEventListener("click", checkHealth);
+    checkHealth();
+  </script>
+</body>
+</html>

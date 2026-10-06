@@ -1,0 +1,30 @@
+# Lingkungan Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Rahasia dan konfigurasi lokal
+.env
+instance/
+
+# Pengujian
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Log dan backup database
+*.log
+backups/
+*.sql
+
+# Bobot model AI (ukuran besar, dikelola terpisah)
+*.pt
+*.onnx
+*.pth
+
+# Editor dan sistem operasi
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
