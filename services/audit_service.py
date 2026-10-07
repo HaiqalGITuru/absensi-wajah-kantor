@@ -34,6 +34,8 @@ ATTENDANCE_CORRECTED = "attendance_corrected"
 ATTENDANCE_CANCELLED = "attendance_cancelled"
 
 LIVENESS_REJECTED = "liveness_rejected"
+
+REPORT_EXPORTED = "report_exported"
 BIOMETRIC_KEY_CREATED = "biometric_key_created"
 BIOMETRIC_KEY_ROTATED = "biometric_key_rotated"
 

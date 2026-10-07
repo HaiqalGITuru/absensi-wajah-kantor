@@ -44,6 +44,7 @@ from routes.employees import bp as employees_bp
 from routes.schedules import bp as schedules_bp
 from routes.kiosk import bp as kiosk_bp
 from routes.attendance import bp as attendance_bp
+from routes.reports import bp as reports_bp
 from kiosk.cli import register_kiosk_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
@@ -426,6 +427,7 @@ def create_app(config_name=None):
     app.register_blueprint(schedules_bp)
     app.register_blueprint(kiosk_bp)
     app.register_blueprint(attendance_bp)
+    app.register_blueprint(reports_bp)
     register_commands(app)
     register_recognition_commands(app)
     register_attendance_commands(app)

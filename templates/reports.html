@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Laporan{% endblock %}
+{% block page_class %}page-wide{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Laporan kehadiran</h1>
+</div>
+
+<form method="get" class="filters filters-report" role="search">
+  <div class="field">
+    <label for="start">Dari tanggal</label>
+    <input id="start" name="start" type="date" value="{{ f.start.isoformat() if f.start else '' }}"
+           max="{{ f.today.isoformat() }}" {% if errors.get('start') %}aria-invalid="true"{% endif %}>
+  </div>
+  <div class="field">
+    <label for="end">Sampai tanggal</label>
+    <input id="end" name="end" type="date" value="{{ f.end.isoformat() if f.end else '' }}"
+           max="{{ f.today.isoformat() }}" {% if errors.get('end') %}aria-invalid="true"{% endif %}>
+  </div>
+  <div class="field">
+    <label for="q">Cari kode atau nama</label>
+    <input id="q" name="q" type="search" value="{{ f.q }}" maxlength="100">
+  </div>
+  <div class="field">
+    <label for="department">Departemen</label>
+    <select id="department" name="department">
+      <option value="">Semua departemen</option>
+      {% for d in departments %}
+      <option value="{{ d }}" {% if d == f.department %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field field-actions">
+    <button type="submit" class="btn">Tampilkan</button>
+  </div>
+</form>
+
+{% if errors %}
+<div class="flash flash-error" role="alert">{{ errors.values()|join(' ') }}</div>
+{% else %}
+
+{% set params = {'start': f.start.isoformat(), 'end': f.end.isoformat(), 'q': f.q, 'department': f.department} %}
+<div class="report-bar">
+  <p class="result-count">
+    <strong>{{ f.start.strftime('%d-%m-%Y') }} s.d. {{ f.end.strftime('%d-%m-%Y') }}</strong> —
+    {{ summary|length }} karyawan, {{ detail_count }} baris detail harian.
+  </p>
+  <div class="report-actions">
+    <a class="btn" href="{{ url_for('reports.export', kind='rekap', **params) }}">Unduh rekap (CSV)</a>
+    <a class="btn btn-outline" href="{{ url_for('reports.export', kind='detail', **params) }}">Unduh detail harian (CSV)</a>
+  </div>
+</div>
+<p class="hint">
+  "Tidak tercatat masuk" hanya dihitung untuk hari yang sudah lewat. Setiap unduhan tercatat di audit log.
+  File CSV memakai pemisah titik koma (;) agar langsung rapi di Excel berpengaturan Indonesia.
+</p>
+
+{% if summary %}
+<div class="card table-card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Kode</th>
+          <th scope="col">Nama</th>
+          <th scope="col">Departemen</th>
+          <th scope="col" class="num">Hari kerja</th>
+          <th scope="col" class="num">Hadir</th>
+          <th scope="col" class="num">Terlambat</th>
+          <th scope="col" class="num">Menit terlambat</th>
+          <th scope="col" class="num">Pulang cepat</th>
+          <th scope="col" class="num">Tidak tercatat masuk</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in summary %}
+        <tr>
+          <td class="nowrap"><code>{{ i.employee.employee_code }}</code></td>
+          <td>
+            {{ i.employee.full_name }}
+            {% if not i.employee.is_active %}<span class="badge badge-off">Nonaktif</span>{% endif %}
+          </td>
+          <td>{{ i.employee.department }}</td>
+          <td class="num">{{ i.workdays }}</td>
+          <td class="num">{{ i.present }}</td>
+          <td class="num">{% if i.late %}<span class="badge badge-warn">{{ i.late }}</span>{% else %}0{% endif %}</td>
+          <td class="num">{{ i.late_minutes }}</td>
+          <td class="num">{{ i.left_early }}</td>
+          <td class="num">{% if i.absent %}<span class="badge badge-off">{{ i.absent }}</span>{% else %}0{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row" colspan="3">Jumlah</th>
+          <td class="num">{{ totals.workdays }}</td>
+          <td class="num">{{ totals.present }}</td>
+          <td class="num">{{ totals.late }}</td>
+          <td class="num">{{ totals.late_minutes }}</td>
+          <td class="num">{{ totals.left_early }}</td>
+          <td class="num">{{ totals.absent }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card empty"><p>Tidak ada data untuk periode dan filter ini.</p></div>
+{% endif %}
+{% endif %}
+{% endblock %}

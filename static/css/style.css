@@ -588,3 +588,52 @@ a.btn { text-decoration: none; display: inline-block; }
 }
 
 .check-confirm input { margin-top: 0.25rem; }
+
+/* Tahap 5: laporan dan dashboard kehadiran */
+.filters-report { grid-template-columns: 1fr 1fr 1.6fr 1.4fr auto; }
+
+@media (max-width: 860px) {
+  .filters-report { grid-template-columns: 1fr 1fr; }
+}
+
+.report-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.report-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.btn-outline {
+  background: #fff;
+  color: var(--brand);
+  border: 1px solid var(--brand);
+}
+
+.btn-outline:hover { background: #eef5f8; }
+
+.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.table tfoot th, .table tfoot td { border-top: 2px solid var(--line); font-weight: 700; }
+
+.summary-attendance .item-ok { border-left-color: var(--ok, #1f7a4d); }
+.summary-attendance .item-warn { border-left-color: #d99a00; }
+.summary-attendance .item-off { border-left-color: var(--error); }
+.summary-label .muted { display: block; font-size: 0.85em; }
+
+.summary-small .summary-value { font-size: 1.4rem; }
+
+.section-title { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+.summary-attendance { margin-bottom: 1.25rem; }
+/* Judul kolom angka boleh dua baris agar tabel rekap muat tanpa digeser. */
+.table th.num { white-space: normal; max-width: 7rem; line-height: 1.25; vertical-align: bottom; }
+.report-bar { margin-top: 0.5rem; }
+.table thead th { vertical-align: bottom; }

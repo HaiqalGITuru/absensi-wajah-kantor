@@ -114,34 +114,59 @@ def logout():
 @bp.get("/admin")
 @login_required
 def dashboard():
-    """Halaman utama admin. Statistik kehadiran lengkap dibuat di Tahap 5."""
-    recent_logs = db.session.execute(
-        db.select(AuditLog).order_by(AuditLog.id.desc()).limit(10)
+    """Dashboard kehadiran harian (Tahap 5A, FR-12)."""
+    from datetime import datetime, time
+
+    from models import WEEKDAY_NAMES, Employee, FaceTemplate
+    from services import attendance_service
+
+    now = office_now()
+    today = now.date()
+    roster = attendance_service.daily_roster(today)
+    attendance = {
+        "scheduled": sum(1 for r in roster if r["rule"] is not None),
+        "present": sum(1 for r in roster if r["present"]),
+        "late": sum(1 for r in roster if r["late"]),
+        "absent": sum(1 for r in roster if not r["present"] and r["rule"] is not None),
+        "checked_out": sum(1 for r in roster if r["present"] and r["session"].check_out_at),
+    }
+    latest = db.session.execute(
+        db.select(AttendanceSession)
+        .where(AttendanceSession.work_date == today, AttendanceSession.check_in_at.is_not(None))
+        .order_by(AttendanceSession.updated_at.desc(), AttendanceSession.id.desc())
+        .limit(8)
     ).scalars().all()
+
     summary = {
         "active_employees": employee_service.count_employees(active=True),
         "inactive_employees": employee_service.count_employees(active=False),
         "active_schedules": len(schedule_service.active_schedules()),
         "employees_with_face": biometric_service.count_employees_with_templates(),
     }
+    with_face = db.select(FaceTemplate.employee_id).distinct()
+    no_face = db.session.execute(
+        db.select(db.func.count(Employee.id)).where(
+            Employee.is_active.is_(True), Employee.id.not_in(with_face))
+    ).scalar_one()
+    rejected_today = db.session.execute(
+        db.select(db.func.count(AuditLog.id)).where(
+            AuditLog.action == "liveness_rejected",
+            AuditLog.created_at >= datetime.combine(today, time.min))
+    ).scalar_one()
+
+    recent_logs = db.session.execute(
+        db.select(AuditLog).order_by(AuditLog.id.desc()).limit(10)
+    ).scalars().all()
     key_status = biometric_service.keyring_status()
-    today = office_now().date()
-    summary["checked_in_today"] = db.session.execute(
-        db.select(db.func.count(AttendanceSession.id)).where(
-            AttendanceSession.work_date == today, AttendanceSession.check_in_at.is_not(None))
-    ).scalar_one()
-    summary["late_today"] = db.session.execute(
-        db.select(db.func.count(AttendanceSession.id)).where(
-            AttendanceSession.work_date == today,
-            AttendanceSession.status == AttendanceSession.STATUS_LATE)
-    ).scalar_one()
-    summary["checked_out_today"] = db.session.execute(
-        db.select(db.func.count(AttendanceSession.id)).where(
-            AttendanceSession.work_date == today, AttendanceSession.check_out_at.is_not(None))
-    ).scalar_one()
     kiosk_status = admin_view(KioskState(current_app.config["KIOSK_STATE_FILE"]).read())
     return render_template(
         "dashboard.html",
+        today_label=f"{WEEKDAY_NAMES[today.weekday()]}, {today:%d-%m-%Y}",
+        today=today,
+        attendance=attendance,
+        latest=latest,
+        no_face=no_face,
+        rejected_today=rejected_today,
         recent_logs=recent_logs,
         summary=summary,
         key_status=key_status,

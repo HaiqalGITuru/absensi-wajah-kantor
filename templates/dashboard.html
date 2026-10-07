@@ -3,9 +3,113 @@
 
 {% block content %}
 <h1>Halo, {{ current_user.name }}</h1>
-<p class="muted">Statistik kehadiran harian ditambahkan di Tahap 5.</p>
+<p class="muted">Kehadiran hari ini — <strong>{{ today_label }}</strong></p>
 
-<section class="summary" aria-label="Ringkasan data">
+{% set day = today.isoformat() %}
+<section class="summary summary-attendance" aria-label="Kehadiran hari ini">
+  <a class="summary-item item-ok" href="{{ url_for('attendance.list_attendance', date=day, status='present') }}">
+    <span class="summary-value">{{ attendance.present }}</span>
+    <span class="summary-label">Sudah masuk <span class="muted">dari {{ attendance.scheduled }} terjadwal</span></span>
+  </a>
+  <a class="summary-item item-warn" href="{{ url_for('attendance.list_attendance', date=day, status='late') }}">
+    <span class="summary-value">{{ attendance.late }}</span>
+    <span class="summary-label">Terlambat</span>
+  </a>
+  <a class="summary-item item-off" href="{{ url_for('attendance.list_attendance', date=day, status='absent') }}">
+    <span class="summary-value">{{ attendance.absent }}</span>
+    <span class="summary-label">Belum masuk</span>
+  </a>
+  <a class="summary-item" href="{{ url_for('attendance.list_attendance', date=day) }}">
+    <span class="summary-value">{{ attendance.checked_out }}</span>
+    <span class="summary-label">Sudah pulang</span>
+  </a>
+</section>
+
+{% set alerts = [] %}
+{% if not kiosk_status.online %}{% set _ = alerts.append(('error', 'Layanan kamera kios tidak berjalan: absensi otomatis tidak tercatat.', none)) %}
+{% elif kiosk_status.camera != 'ok' %}{% set _ = alerts.append(('error', 'Kamera kios bermasalah: ' ~ kiosk_status.detail, none)) %}{% endif %}
+{% if not key_status.ok %}{% set _ = alerts.append(('error', 'Kunci enkripsi templat wajah belum siap: ' ~ key_status.message, none)) %}{% endif %}
+{% if rejected_today %}{% set _ = alerts.append(('info', rejected_today ~ ' percobaan absensi ditolak pemeriksaan anti-foto hari ini. Tinjau di Aktivitas terbaru.', none)) %}{% endif %}
+{% if no_face %}{% set _ = alerts.append(('info', no_face ~ ' karyawan aktif belum punya wajah terdaftar dan tidak bisa absen lewat kamera.', url_for('employees.list_employees'))) %}{% endif %}
+{% if summary.active_schedules == 0 %}{% set _ = alerts.append(('info', 'Belum ada jadwal kerja aktif.', url_for('schedules.create'))) %}{% endif %}
+
+{% if alerts %}
+<section aria-label="Perlu perhatian">
+  {% for kind, text, link in alerts %}
+  <div class="flash flash-{{ kind }}" {% if kind == 'error' %}role="alert"{% endif %}>
+    {{ text }}{% if link %} <a href="{{ link }}">Buka</a>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <h2 class="card-title">Absensi terbaru hari ini</h2>
+    <a href="{{ url_for('attendance.list_attendance', date=day) }}">Lihat semua</a>
+  </div>
+  {% if latest %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Nama</th>
+          <th scope="col">Masuk</th>
+          <th scope="col">Pulang</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in latest %}
+        <tr>
+          <td>{{ s.employee.full_name }} <span class="muted">{{ s.employee.employee_code }}</span></td>
+          <td class="nowrap">{{ s.check_in_at.strftime('%H:%M') }}
+            {% if s.check_in_method == 'admin' %}<span class="badge badge-info">admin</span>{% endif %}</td>
+          <td class="nowrap">{{ s.check_out_at.strftime('%H:%M') if s.check_out_at else '–' }}
+            {% if s.left_early %}<span class="badge badge-warn">pulang cepat</span>{% endif %}</td>
+          <td class="nowrap">
+            {% if s.status == 'terlambat' %}<span class="badge badge-warn">Terlambat {{ s.late_minutes }} mnt</span>
+            {% else %}<span class="badge badge-ok">Hadir</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Belum ada absensi tercatat hari ini.</p>
+  {% endif %}
+</section>
+
+<section class="card kiosk-card" aria-labelledby="kiosk-title">
+  <h2 class="card-title" id="kiosk-title">Layanan kamera kios</h2>
+  {% if kiosk_status.online %}
+    {% if kiosk_status.camera == 'ok' %}
+    <p><span class="badge badge-ok">Berjalan</span> Kamera aktif, {{ kiosk_status.employees }} karyawan dapat dikenali.</p>
+    {% else %}
+    <p><span class="badge badge-off">Kamera bermasalah</span> {{ kiosk_status.detail }}</p>
+    {% endif %}
+  {% else %}
+    <p><span class="badge badge-off">Tidak berjalan</span> {{ kiosk_status.detail }}
+       Jalankan <code>flask --app app kiosk-run</code> di komputer kios.</p>
+  {% endif %}
+  <p class="muted"><a href="{{ url_for('kiosk.page') }}" target="_blank" rel="noopener">Buka halaman kios</a></p>
+  {% if liveness_mode == 'off' %}
+  <div class="flash flash-error">
+    Pemeriksaan anti-foto (keaktifan wajah) <strong>dimatikan</strong> (LIVENESS_MODE=off).
+    Foto atau video wajah karyawan dapat dikenali sebagai orang asli.
+  </div>
+  {% else %}
+  <div class="flash flash-info">
+    Pemeriksaan anti-foto <strong>aktif dalam uji coba</strong> (mode: {{ liveness_mode }}).
+    Tidak ada anti-foto yang sempurna; kios tetap sebaiknya berada di area yang terlihat
+    petugas, dan absensi alternatif tetap disediakan.
+  </div>
+  {% endif %}
+</section>
+
+<h2 class="section-title">Data master</h2>
+<section class="summary summary-small" aria-label="Ringkasan data master">
   <a class="summary-item" href="{{ url_for('employees.list_employees') }}">
     <span class="summary-value">{{ summary.active_employees }}</span>
     <span class="summary-label">Karyawan aktif</span>
@@ -23,51 +127,6 @@
     <span class="summary-label">Wajah terdaftar</span>
   </a>
 </section>
-
-<section class="card kiosk-card" aria-labelledby="kiosk-title">
-  <h2 class="card-title" id="kiosk-title">Layanan kamera kios</h2>
-  {% if kiosk_status.online %}
-    {% if kiosk_status.camera == 'ok' %}
-    <p><span class="badge badge-ok">Berjalan</span> Kamera aktif, {{ kiosk_status.employees }} karyawan dapat dikenali.</p>
-    {% else %}
-    <p><span class="badge badge-off">Kamera bermasalah</span> {{ kiosk_status.detail }}</p>
-    {% endif %}
-  {% else %}
-    <p><span class="badge badge-off">Tidak berjalan</span> {{ kiosk_status.detail }}
-       Jalankan <code>flask --app app kiosk-run</code> di komputer kios.</p>
-  {% endif %}
-  <p class="muted">
-    Hari ini: {{ summary.checked_in_today }} masuk ({{ summary.late_today }} terlambat),
-    {{ summary.checked_out_today }} pulang.
-    <a href="{{ url_for('kiosk.page') }}" target="_blank" rel="noopener">Buka halaman kios</a>
-  </p>
-  {% if liveness_mode == 'off' %}
-  <div class="flash flash-error">
-    Pemeriksaan anti-foto (keaktifan wajah) <strong>dimatikan</strong> (LIVENESS_MODE=off).
-    Foto atau video wajah karyawan dapat dikenali sebagai orang asli.
-  </div>
-  {% else %}
-  <div class="flash flash-info">
-    Pemeriksaan anti-foto <strong>aktif dalam uji coba</strong> (mode: {{ liveness_mode }}).
-    Tidak ada anti-foto yang sempurna; kios tetap sebaiknya berada di area yang terlihat
-    petugas, dan absensi alternatif tetap disediakan.
-  </div>
-  {% endif %}
-</section>
-
-{% if not key_status.ok %}
-<div class="flash flash-error" role="alert">
-  Kunci enkripsi templat wajah belum siap: {{ key_status.message }}
-  Pendaftaran dan pengenalan wajah tidak dapat berjalan sampai kunci tersedia.
-</div>
-{% endif %}
-
-{% if summary.active_schedules == 0 %}
-<div class="flash flash-info">
-  Belum ada jadwal kerja aktif. Buat jadwal terlebih dahulu sebelum menambahkan karyawan.
-  <a href="{{ url_for('schedules.create') }}">Tambah jadwal kerja</a>
-</div>
-{% endif %}
 
 <section class="card">
   <h2 class="card-title">Aktivitas terbaru</h2>
