@@ -168,6 +168,22 @@ def _safe(value):
     return "'" + text if text.startswith(_FORMULA_START) else text
 
 
+class _ExcelText(str):
+    """Penanda nilai yang sudah aman dan harus dibaca Excel sebagai TEKS."""
+
+
+def _code(value):
+    """Kode karyawan sebagai teks Excel: ="2310010164".
+
+    Tanpa ini Excel mengubah kode angka panjang menjadi notasi ilmiah
+    (2,31E+09) dan memotong NIP 18 digit menjadi 15 digit secara permanen.
+    Aman karena kode karyawan hanya boleh berisi A-Z, 0-9, titik, garis bawah,
+    dan tanda hubung (employee_service.CODE_PATTERN), jadi tidak bisa memuat
+    tanda kutip atau rumus lain.
+    """
+    return _ExcelText('="' + str(value).replace('"', '""') + '"')
+
+
 def _hm(dt):
     return dt.strftime("%H:%M") if dt else ""
 
@@ -178,7 +194,7 @@ def _to_csv(header, rows):
     writer = csv.writer(buf, delimiter=";", lineterminator="\r\n")
     writer.writerow(header)
     for row in rows:
-        writer.writerow([_safe(v) for v in row])
+        writer.writerow([v if isinstance(v, _ExcelText) else _safe(v) for v in row])
     return "\ufeff" + buf.getvalue()
 
 
@@ -187,7 +203,7 @@ def detail_csv(details):
     for r in details:
         s, e = r["session"], r["employee"]
         rows.append([
-            r["date"].strftime("%d-%m-%Y"), r["weekday"], e.employee_code, e.full_name,
+            r["date"].strftime("%d-%m-%Y"), r["weekday"], _code(e.employee_code), e.full_name,
             e.department, r["scheduled_start"], r["scheduled_end"],
             _hm(s.check_in_at) if s else "",
             (_hm(s.check_out_at) + (" (+1)" if s and s.check_out_at
@@ -200,7 +216,7 @@ def detail_csv(details):
 
 def summary_csv(summary):
     rows = [[
-        i["employee"].employee_code, i["employee"].full_name, i["employee"].department,
+        _code(i["employee"].employee_code), i["employee"].full_name, i["employee"].department,
         i["workdays"], i["present"], i["late"], i["late_minutes"], i["left_early"],
         i["no_checkout"], i["absent"],
     ] for i in summary]

@@ -107,10 +107,22 @@ def test_csv_rekap_dan_detail(staff):
     details = rpt.detail_rows(MON, MON, today=WED)
     detail = _parse(rpt.detail_csv(details))
     assert detail[0] == rpt.DETAIL_HEADER
-    row = next(r for r in detail if r[2] == "K1")
+    row = next(r for r in detail if r[2] == '="K1"')
     assert row[:2] == ["05-10-2026", "Senin"] and row[7] == "07:50" and row[9] == "Terlambat"
     rekap = _parse(rpt.summary_csv(rpt.summary_rows(details)))
     assert rekap[0] == rpt.SUMMARY_HEADER and len(rekap) == 4
+
+
+def test_kode_angka_panjang_tetap_teks_di_excel(app, schedule):
+    """Regresi uji kantor 7 Okt: 2310010164 tampil 2,31E+09 di Excel.
+    NIP 18 digit bahkan akan terpotong permanen jika dibaca sebagai angka."""
+    for code in ("2310010164", "198701012010011001", "0006"):
+        db.session.add(Employee(employee_code=code, full_name=f"P{code}", department="X",
+                                work_schedule_id=schedule.id))
+    db.session.commit()
+    rows = _parse(rpt.summary_csv(rpt.summary_rows(rpt.detail_rows(MON, MON, today=WED))))
+    codes = {r[0] for r in rows[1:]}
+    assert codes == {'="2310010164"', '="198701012010011001"', '="0006"'}
 
 
 def test_csv_mencegah_rumus_excel(app, schedule):
