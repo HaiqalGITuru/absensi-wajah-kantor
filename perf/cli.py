@@ -54,8 +54,10 @@ def register_perf_commands(app):
             click.echo(f"  {label:<36}{shown:>12}{'< ' + format(target, 'g') + ' ' + unit:>12}   "
                        + click.style("OK" if ok else "LAMBAT", fg="green" if ok else "red"))
         if r.get("frame_ms_p95") is not None:
+            empty = (f"{r['empty_frame_ms']:.1f} ms" if r.get("empty_frame_ms") is not None
+                     else "- (tidak ada frame tanpa wajah)")
             click.echo(f"    frame dengan wajah: {r['frames_with_face']}, p95 {r['frame_ms_p95']:.1f} ms; "
-                       f"frame tanpa wajah rata-rata {r['empty_frame_ms'] or 0:.1f} ms")
+                       f"frame tanpa wajah rata-rata {empty}")
         elif camera_seconds:
             click.secho("    Tidak ada wajah terdeteksi selama pengukuran kamera.", fg="yellow")
         if r["failed"]:

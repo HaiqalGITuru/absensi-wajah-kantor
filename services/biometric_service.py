@@ -61,9 +61,13 @@ def key_file_path():
     return Path(path)
 
 
-def load_keyring():
-    """Membaca file kunci. Mengembalikan (versi_aktif, {versi: kunci_bytes})."""
-    path = key_file_path()
+def load_keyring(path=None):
+    """Membaca file kunci. Mengembalikan (versi_aktif, {versi: kunci_bytes}).
+
+    `path` (opsional) membaca file kunci di lokasi lain, mis. salinan kunci di
+    flashdisk saat memulihkan backup. Bawaan: BIOMETRIC_KEY_FILE.
+    """
+    path = Path(path) if path else key_file_path()
     if not path.exists():
         raise BiometricKeyError(
             "File kunci biometrik belum dibuat. "

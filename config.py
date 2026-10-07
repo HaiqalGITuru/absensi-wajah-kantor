@@ -98,6 +98,10 @@ class Config:
     KIOSK_LOCK_FILE = os.getenv("KIOSK_LOCK_FILE", str(BASE_DIR / "instance" / "kiosk.lock"))
     TEMPLATE_RELOAD_SECONDS = float(os.getenv("TEMPLATE_RELOAD_SECONDS", "60"))
 
+    # Backup (Tahap 5D). Sebaiknya di luar folder proyek, mis. D:\absensi-backup.
+    BACKUP_DIR = os.getenv("BACKUP_DIR", str(BASE_DIR / "backups"))
+    BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "30"))
+
     # Anti-foto (Tahap 4D). Mode: off | passive | challenge | passive+challenge.
     # Ambang masih SEMENTARA dan perlu dikalibrasi di lokasi (PRD 13.2).
     LIVENESS_MODE = os.getenv("LIVENESS_MODE", "passive+challenge")

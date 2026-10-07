@@ -18,6 +18,11 @@ Pemeriksaan kamera:
     flask --app app camera-scan           (mencari webcam yang terpasang)
     flask --app app camera-check          (uji stabilitas dan pencahayaan)
 
+Backup dan pemulihan (lihat docs/BACKUP.md):
+    flask --app app backup-create
+    flask --app app backup-key E:\\kunci-absensi
+    flask --app app backup-test backups\\absensi_backup_....zip --key E:\\kunci-absensi\\....json
+
 Uji performa (database sementara, data asli tidak disentuh):
     flask --app app perf-check
 
@@ -50,6 +55,7 @@ from routes.attendance import bp as attendance_bp
 from routes.reports import bp as reports_bp
 from kiosk.cli import register_kiosk_commands
 from perf.cli import register_perf_commands
+from maintenance.cli import register_maintenance_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
 from services.cli_errors import friendly_db_errors
@@ -441,6 +447,7 @@ def create_app(config_name=None, overrides=None):
     register_attendance_commands(app)
     register_kiosk_commands(app)
     register_perf_commands(app)
+    register_maintenance_commands(app)
 
     @app.after_request
     def security_headers(response):
