@@ -201,7 +201,9 @@ class LivenessGate:
     def update(self, tracks_by_id, events, now):
         result = GateResult()
         for event in events:
-            if event.in_cooldown or self.s.mode == MODE_OFF:
+            # Semua peristiwa diperiksa, termasuk yang dalam masa jeda: wajah
+            # yang ditampilkan ke kamera harus selalu dinilai asli/palsu.
+            if self.s.mode == MODE_OFF:
                 result.accepted.append(event)
             else:
                 self.pending[event.track_id] = _Pending(event, now)

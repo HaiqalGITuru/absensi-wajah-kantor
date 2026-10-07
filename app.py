@@ -282,6 +282,11 @@ def register_commands(app):
         )
         if a["format_ok"]:
             click.echo(f"Format {settings.fourcc} diterima driver (urutan: {a['strategy']}).")
+            if a["strategy"] != settings.format_strategy:
+                click.echo(
+                    f"Saran: tambahkan CAMERA_FORMAT_STRATEGY={a['strategy']} di .env "
+                    "agar kamera terbuka lebih cepat."
+                )
         else:
             click.secho(
                 f"Driver menolak format {settings.fourcc} di semua urutan pengaturan; "
@@ -337,9 +342,9 @@ def register_commands(app):
                 f"Resolusi yang didapat {a['width']}x{a['height']}, bukan "
                 f"{settings.width}x{settings.height}."
             )
-        if stats["fps"] < 15:
+        if stats["fps"] < 12:
             problems.append(
-                "FPS di bawah 15. Turunkan resolusi dengan --width 640 --height 480 "
+                "FPS di bawah 12. Turunkan resolusi dengan --width 640 --height 480 "
                 "untuk menguji, lalu ubah CAMERA_WIDTH/CAMERA_HEIGHT di .env jika hasilnya baik."
             )
         if stats["failures"]:

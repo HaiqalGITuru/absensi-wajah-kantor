@@ -11,6 +11,7 @@ import cv2
 
 from recognition.detector import assess
 from recognition.face_check import _text
+from recognition.liveness import SPOOF, passive_verdict
 from recognition.matcher import AMBIGUOUS, MATCH, UNKNOWN
 from tracking.face_tracker import CONFIRMED
 
@@ -55,6 +56,9 @@ def label_for(track, people, gate=None):
             return gate["prompts"][track.id], COLORS["pending"]
         if track.id in gate.get("rejected", ()):
             return "Bukan wajah asli", COLORS[UNKNOWN]
+        settings = gate.get("settings")
+        if settings is not None and settings.passive and passive_verdict(track, settings) == SPOOF:
+            return "Bukan wajah asli", COLORS[UNKNOWN]
         if track.id in gate.get("pending", ()):
             return "Memeriksa keaktifan...", COLORS["pending"]
     if state == CONFIRMED:
@@ -77,6 +81,7 @@ def gate_view(gate, result):
         "prompts": result.prompts if result else {},
         "pending": set(gate.pending),
         "rejected": gate.rejected_tracks,
+        "settings": gate.s,
     }
 
 

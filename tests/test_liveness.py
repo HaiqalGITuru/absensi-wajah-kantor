@@ -184,10 +184,25 @@ def test_orang_pergi_sebelum_dipastikan_tidak_dicatat():
     assert r.accepted == [] and not gate.pending
 
 
-def test_peristiwa_dalam_jeda_tidak_ditahan():
+def test_peristiwa_dalam_jeda_tetap_diperiksa():
+    """Regresi uji kantor 7 Okt: foto ditunjukkan dalam masa jeda 30 detik
+    sempat lolos tanpa pemeriksaan anti-foto."""
     gate = lv.LivenessGate(S)
-    r = gate.update({}, [ev(cooldown=True)], 0.0)
-    assert len(r.accepted) == 1 and not gate.pending
+    r = gate.update({1: Track(scores=(0.0, 0.0, 0.0))}, [ev(cooldown=True)], 0.0)
+    assert r.accepted == []
+    assert r.rejected[0][1] == lv.REASON_SPOOF
+
+
+def test_label_pratinjau_merah_untuk_wajah_palsu():
+    from recognition.identify import label_for
+    from tracking.face_tracker import CONFIRMED
+
+    t = Track(scores=(0.0, 0.0, 0.0))
+    t.confirmed_id, t.last_reason = 7, ""
+    t.state = CONFIRMED
+    label, _ = label_for(t, {7: ("K001", "Budi")}, {"prompts": {}, "pending": set(),
+                                                    "rejected": set(), "settings": S})
+    assert label == "Bukan wajah asli"
 
 
 # ---------------------------------------------------------------- model asli
@@ -305,6 +320,23 @@ def test_kios_mode_off_tetap_berfungsi(app, tmp_path, budi, monkeypatch):
     for _ in range(10):
         worker.run_once()
     assert len(sessions()) == 1  # perilaku lama tanpa anti-foto
+
+
+def test_kios_foto_dalam_masa_jeda_ditolak(app, tmp_path, budi, monkeypatch):
+    """Wajah asli tercatat, lalu foto ditunjukkan dalam masa jeda: harus ditolak."""
+
+    worker, live = kiosk(app, tmp_path, monkeypatch, live_score=0.99)
+    for _ in range(10):
+        worker.run_once()
+    assert len(sessions()) == 1
+
+    worker.tracker.tracks.clear()      # orang asli pergi, jejak baru dimulai
+    live.value = 0.0                   # yang muncul sekarang foto
+    for _ in range(10):
+        worker.run_once()
+    assert worker.liveness_rejected == 1
+    assert worker.message["text"] == LIVENESS_REJECT_MESSAGE
+    assert len(sessions()) == 1
 
 
 def test_status_kios_melaporkan_mode_anti_foto(app, tmp_path, budi, monkeypatch):

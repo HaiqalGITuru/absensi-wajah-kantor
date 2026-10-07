@@ -476,3 +476,30 @@ def test_cli_check_dengan_nama(app, monkeypatch):
     assert res.exit_code == 0, res.output
     assert "Kamera: Logi C270 HD WebCam (indeks 2)" in res.output
     assert opened[0] == 2
+
+
+
+def test_strategi_format_tersimpan_dicoba_pertama():
+    """Pembukaan kamera cepat: urutan yang pernah berhasil dicoba lebih dulu."""
+    caps = [PickyCapture(fourcc_after_fps) for _ in range(3)]
+    factory = factory_returning(*caps)
+    cam = Webcam(CameraSettings(warmup_frames=1, format_strategy="format-dua-kali"),
+                 capture_factory=factory).open()
+    assert cam.actual["strategy"] == "format-dua-kali"
+    assert len(factory.calls) == 1   # tidak perlu mencoba urutan lain dulu
+
+
+def test_cli_menyarankan_strategi_format(app, monkeypatch):
+    monkeypatch.setattr(webcam.cv2, "VideoCapture", lambda i, b: PickyCapture(size_before_fourcc))
+    res = app.test_cli_runner().invoke(args=["camera-check", "--no-preview", "--seconds", "1"])
+    assert "CAMERA_FORMAT_STRATEGY=resolusi-dulu" in res.output
+
+
+def test_cli_fps_15_tidak_dianggap_masalah(app, monkeypatch):
+    monkeypatch.setattr(webcam.cv2, "VideoCapture", lambda i, b: FakeCapture())
+    monkeypatch.setattr(webcam, "measure", lambda cam, **kw: {
+        "seconds": 5.0, "frames": 74, "failures": 0, "fps": 14.8, "max_gap_ms": 140,
+        "brightness": 146.0, "sharpness": 27.0, "lighting": "Pencahayaan cukup."})
+    res = app.test_cli_runner().invoke(args=["camera-check", "--no-preview", "--seconds", "1"])
+    assert "FPS di bawah" not in res.output
+    assert "siap untuk tahap deteksi wajah" in res.output

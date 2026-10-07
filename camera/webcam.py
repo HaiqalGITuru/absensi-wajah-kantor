@@ -50,6 +50,9 @@ class CameraSettings:
     fps: int = 30
     fourcc: str = "MJPG"
     warmup_frames: int = 5
+    # Urutan pengaturan MJPG yang dicoba PERTAMA (lihat camera-check).
+    # Mengisinya mempercepat pembukaan kamera, terutama saat buka ulang.
+    format_strategy: str = ""
     max_consecutive_failures: int = 30
 
     @classmethod
@@ -61,6 +64,7 @@ class CameraSettings:
             width=int(config.get("CAMERA_WIDTH", 1280)),
             height=int(config.get("CAMERA_HEIGHT", 720)),
             fps=int(config.get("CAMERA_FPS", 30)),
+            format_strategy=str(config.get("CAMERA_FORMAT_STRATEGY") or "").strip(),
         )
 
 
@@ -173,11 +177,15 @@ class Webcam:
         """
         s = self.settings
         strategy_used = None
-        for strategy in self.FORMAT_STRATEGIES:
+        strategies = list(self.FORMAT_STRATEGIES)
+        if s.format_strategy in strategies:
+            strategies.remove(s.format_strategy)
+            strategies.insert(0, s.format_strategy)
+        for strategy in strategies:
             cap = self._connect()
             self._configure(cap, strategy)
             got = _decode_fourcc(cap.get(cv2.CAP_PROP_FOURCC))
-            if got == s.fourcc or strategy == self.FORMAT_STRATEGIES[-1]:
+            if got == s.fourcc or strategy == strategies[-1]:
                 strategy_used = strategy
                 break
             cap.release()

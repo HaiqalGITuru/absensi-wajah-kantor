@@ -61,6 +61,8 @@ class Config:
     CAMERA_WIDTH = int(os.getenv("CAMERA_WIDTH", "1280"))
     CAMERA_HEIGHT = int(os.getenv("CAMERA_HEIGHT", "720"))
     CAMERA_FPS = int(os.getenv("CAMERA_FPS", "30"))
+    # Urutan pengaturan MJPG yang berhasil (disarankan oleh camera-check).
+    CAMERA_FORMAT_STRATEGY = os.getenv("CAMERA_FORMAT_STRATEGY", "")
 
     # Model AI (Tahap 3B). Folder berisi file .onnx; tidak ikut ke Git.
     MODEL_DIR = os.getenv("MODEL_DIR", str(BASE_DIR / "model_files"))

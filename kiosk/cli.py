@@ -78,7 +78,8 @@ def register_kiosk_commands(app):
             def show(frame, tracks):
                 header = ["MENCATAT ABSENSI", "Ctrl+C di terminal untuk berhenti"]
                 gate_state = {"prompts": {}, "pending": set(worker.gate.pending),
-                              "rejected": worker.gate.rejected_tracks}
+                              "rejected": worker.gate.rejected_tracks,
+                              "settings": worker.gate.s}
                 cv2.imshow(window, identify.annotate(frame, tracks, people, header, gate_state))
                 cv2.waitKey(1)
                 return True
