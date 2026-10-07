@@ -19,7 +19,8 @@ from recognition.detector import assess
 from recognition.embedder import cosine_similarity
 
 DEFAULT_SAMPLES = 5
-MIN_SAMPLE_INTERVAL = 0.4         # detik antar sampel
+MIN_SAMPLE_INTERVAL = 0.6         # detik antar sampel
+START_DELAY = 3.0                 # hitung mundur agar operator sempat minggir
 MIN_CONSISTENCY = 0.5             # kemiripan minimal antar-PASANGAN sampel (SEMENTARA)
 
 
@@ -40,7 +41,8 @@ def _note(rejected, reason):
 
 
 def collect(cam, detector, embedder, quality, samples=DEFAULT_SAMPLES, timeout=60.0,
-            min_interval=MIN_SAMPLE_INTERVAL, on_frame=None, clock=time.perf_counter):
+            min_interval=MIN_SAMPLE_INTERVAL, on_frame=None, clock=time.perf_counter,
+            start_delay=START_DELAY):
     """Mengambil `samples` embedding berkualitas dari kamera.
 
     on_frame(frame, status) dipanggil tiap frame; status berisi daftar wajah,
@@ -69,7 +71,11 @@ def collect(cam, detector, embedder, quality, samples=DEFAULT_SAMPLES, timeout=6
             aligned = embedder.align(frame, det)
             faces.append((det, assess(frame, det, quality, crop=aligned), aligned))
 
-        if len(faces) > 1:
+        countdown = start_delay - (now - start)
+        if countdown > 0:
+            # Masa bersiap: operator minggir, orang yang didaftarkan maju.
+            message = f"Mulai dalam {int(countdown) + 1}... hanya orang yang didaftarkan di depan kamera"
+        elif len(faces) > 1:
             message = "Hanya satu orang di depan kamera"
             _note(result.rejected, message)
         elif len(faces) == 1:

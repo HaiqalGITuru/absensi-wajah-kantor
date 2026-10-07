@@ -110,3 +110,35 @@ Dua lapisan (`recognition/liveness.py`, `LIVENESS_MODE=passive+challenge`):
 - **Tidak ada anti-foto yang sempurna.** Pengawasan kios dan absensi alternatif
   tetap diperlukan (PRD 9.3); setiap penolakan tercatat di audit log
   (`liveness_rejected`) untuk ditinjau.
+
+---
+
+# Kalibrasi ambang kecocokan (uji kantor, 7 Oktober 2026)
+
+**Kamera:** Logi C270 di ruang APTIKA. **Karyawan uji:** 7 orang.
+
+| Jenis perbandingan | Skor kemiripan (kosinus SFace) |
+|---|---|
+| Orang SAMA, menghadap kamera | 0,76 – 0,92 |
+| Orang SAMA, antar-sampel pendaftaran | 0,77 – 0,99 |
+| Orang BERBEDA (konflik saat pendaftaran) | 0,39 – 0,49 |
+| Foto di layar HP (orang sama) | 0,68 (ditolak anti-foto, asli 0,00) |
+
+**Temuan:** ambang awal 0,363 (contoh OpenCV) berada DI BAWAH skor orang
+berbeda, sehingga sistem dapat mengenali seseorang sebagai orang lain.
+
+**Keputusan:** `FACE_MATCH_THRESHOLD=0.60`, memberi jarak 0,11 di atas skor
+orang berbeda tertinggi dan tetap di bawah skor orang sama saat menghadap kamera.
+Frame saat menoleh bisa turun di bawah 0,60; hal ini diterima karena pelacak
+hanya membutuhkan 3 kecocokan dari 5 frame.
+
+**Catatan:** SFace adalah model ringan dengan daya beda di bawah model besar
+(mis. ArcFace) yang tidak dipakai karena lisensinya. Data di atas berasal dari
+sedikit orang; ambang wajib diperiksa ulang dengan `flask --app app
+face-similarity-report` setiap kali karyawan baru didaftarkan, dan diuji lagi
+saat jumlah karyawan terdaftar bertambah banyak (PRD 13.2).
+
+**Perbaikan pendaftaran:** sejumlah pendaftaran gagal dengan kemiripan
+antar-sampel sangat rendah (hingga 0,006), kemungkinan karena wajah operator
+ikut terambil tepat setelah Enter ditekan. Ditambahkan hitung mundur 3 detik
+(`--delay`) dan jeda antar-sampel 0,6 detik.

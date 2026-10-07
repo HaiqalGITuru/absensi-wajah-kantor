@@ -574,3 +574,17 @@ a.btn { text-decoration: none; display: inline-block; }
 @media (max-width: 560px) {
   .info-list > div { grid-template-columns: 1fr; gap: 0.1rem; }
 }
+
+/* Konfirmasi nama sama */
+.form .check-confirm {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-weight: 400;
+  margin-top: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--error-bg);
+  border-radius: 6px;
+}
+
+.check-confirm input { margin-top: 0.25rem; }

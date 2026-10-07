@@ -61,6 +61,18 @@ def _clean(form, current=None):
         errors["full_name"] = "Nama lengkap wajib diisi."
     elif len(full_name) > 150:
         errors["full_name"] = "Nama lengkap maksimal 150 karakter."
+    else:
+        same_name = find_same_name(full_name, exclude_id=current.id if current else None)
+        if same_name and not form.get("confirm_duplicate_name"):
+            listed = ", ".join(
+                f"{e.employee_code}{'' if e.is_active else ' (nonaktif)'}" for e in same_name
+            )
+            errors["full_name"] = (
+                f"Nama ini sudah dipakai karyawan lain: {listed}. Jika orangnya sama, jangan "
+                "buat data baru; aktifkan kembali data lama. Jika memang orang berbeda, "
+                "centang konfirmasi di bawah."
+            )
+            errors["confirm_duplicate_name"] = "1"
 
     department = " ".join((form.get("department") or "").split())
     if not department:
@@ -89,6 +101,15 @@ def _clean(form, current=None):
         "department": department,
         "work_schedule": schedule,
     }
+
+
+def find_same_name(full_name, exclude_id=None):
+    """Karyawan lain (aktif maupun nonaktif) dengan nama yang sama persis,
+    tanpa membedakan huruf besar/kecil."""
+    stmt = db.select(Employee).where(func.lower(Employee.full_name) == full_name.lower())
+    if exclude_id is not None:
+        stmt = stmt.where(Employee.id != exclude_id)
+    return db.session.execute(stmt.order_by(Employee.employee_code)).scalars().all()
 
 
 def _commit_or_conflict():
@@ -153,6 +174,9 @@ def create_employee(form, actor_id):
         description=(
             f"Karyawan ditambahkan: {employee.employee_code} - {employee.full_name} "
             f"({employee.department}, jadwal {employee.work_schedule.name})"
+            + (" [nama sama dengan karyawan lain, dikonfirmasi admin sebagai orang berbeda]"
+               if form.get("confirm_duplicate_name") and find_same_name(
+                   employee.full_name, exclude_id=employee.id) else "")
         ),
         commit=False,
     )

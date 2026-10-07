@@ -74,9 +74,12 @@ class Config:
     FACE_MIN_SIZE = int(os.getenv("FACE_MIN_SIZE", "80"))
     FACE_MIN_SHARPNESS = float(os.getenv("FACE_MIN_SHARPNESS", "40"))
 
-    # Pencocokan identitas (Tahap 3C). Ambang 0.363 berasal dari kode contoh
-    # resmi OpenCV untuk SFace; SEMENTARA, wajib dikalibrasi (PRD 13.2).
-    FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.363"))
+    # Pencocokan identitas (Tahap 3C). Ambang awal 0.363 (contoh resmi OpenCV)
+    # terbukti terlalu rendah pada uji kantor 7 Okt 2026: skor orang BERBEDA
+    # mencapai 0.39-0.49, skor orang SAMA 0.76-0.92 (C270). Ambang 0.60 memberi
+    # jarak 0.11 di atas skor orang berbeda tertinggi. Periksa ulang dengan
+    # `flask face-similarity-report` setiap ada karyawan baru (PRD 13.2).
+    FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.60"))
     FACE_MATCH_MARGIN = float(os.getenv("FACE_MATCH_MARGIN", "0.05"))
     # Pelacakan: identitas dipastikan jika cocok TRACK_CONFIRM_VOTES kali dari
     # TRACK_WINDOW hasil terakhir pada jejak yang sama.

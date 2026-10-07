@@ -279,3 +279,42 @@ def test_dashboard_menampilkan_ringkasan(auth_client, schedule):
     body = auth_client.get("/admin").get_data(as_text=True)
     assert "Karyawan aktif" in body
     assert "Jadwal kerja aktif" in body
+
+
+# ---------------------------------------------------------------- nama ganda
+
+def test_nama_sama_dengan_karyawan_nonaktif_diperingatkan(auth_client, schedule):
+    """Regresi uji kantor 7 Okt: Febian terdaftar sebagai 0003 lalu 0006."""
+    db.session.add(Employee(employee_code="0003", full_name="Febian Nurwulan", department="APTIKA",
+                            work_schedule_id=schedule.id, is_active=False))
+    db.session.commit()
+
+    res = auth_client.post("/admin/employees/new", data=_employee_data(
+        schedule, employee_code="0006", full_name="  febian   nurwulan "))
+    body = res.get_data(as_text=True)
+    assert res.status_code == 400
+    assert "0003 (nonaktif)" in body
+    assert 'name="confirm_duplicate_name"' in body
+    assert _get_employee("0006") is None
+
+
+def test_nama_sama_boleh_jika_dikonfirmasi_orang_berbeda(auth_client, schedule):
+    db.session.add(Employee(employee_code="A1", full_name="Muhammad Rizki", department="X",
+                            work_schedule_id=schedule.id))
+    db.session.commit()
+    data = _employee_data(schedule, employee_code="A2", full_name="Muhammad Rizki")
+    data["confirm_duplicate_name"] = "1"
+    res = auth_client.post("/admin/employees/new", data=data)
+    assert res.status_code == 302
+    assert _get_employee("A2") is not None
+    log = _logs(audit.EMPLOYEE_CREATED)[-1]
+    assert "dikonfirmasi admin sebagai orang berbeda" in log.description
+
+
+def test_ubah_data_sendiri_tidak_dianggap_nama_ganda(auth_client, schedule):
+    auth_client.post("/admin/employees/new", data=_employee_data(schedule, employee_code="B1",
+                                                                 full_name="Sari Dewi"))
+    emp = _get_employee("B1")
+    res = auth_client.post(f"/admin/employees/{emp.id}/edit", data=_employee_data(
+        schedule, employee_code="B1", full_name="Sari Dewi", department="Umum"))
+    assert res.status_code == 302

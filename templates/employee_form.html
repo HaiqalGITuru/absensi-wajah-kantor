@@ -36,6 +36,13 @@
            value="{{ values.get('full_name', '') }}"
            {% if errors.get('full_name') %}aria-invalid="true" aria-describedby="full_name-error"{% endif %}>
     {{ field_error('full_name') }}
+    {% if errors.get('confirm_duplicate_name') or values.get('confirm_duplicate_name') %}
+    <label class="check-confirm" for="confirm_duplicate_name">
+      <input type="checkbox" id="confirm_duplicate_name" name="confirm_duplicate_name" value="1"
+             {% if values.get('confirm_duplicate_name') %}checked{% endif %}>
+      Saya sudah memeriksa: ini orang yang BERBEDA dengan nama yang sama.
+    </label>
+    {% endif %}
 
     <label for="department">Departemen / bidang</label>
     <input id="department" name="department" type="text" required maxlength="100"

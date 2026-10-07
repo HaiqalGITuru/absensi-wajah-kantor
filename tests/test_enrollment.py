@@ -54,7 +54,8 @@ def test_dua_wajah_dalam_gambar_tidak_diambil():
     two = FakeDetector([(50, 100, 150, 180), (400, 100, 150, 180)])
     with pytest.raises(enrollment.EnrollmentError, match="Hanya satu orang"):
         enrollment.collect(SequenceCam(_frames("budi")), two, FakeEmbedder(),
-                           QualitySettings(), samples=3, timeout=3, clock=StepClock(0.1))
+                           QualitySettings(), samples=3, timeout=3, clock=StepClock(0.1),
+                           start_delay=0)
 
 
 def test_wajah_tidak_layak_tidak_diambil():
@@ -62,7 +63,8 @@ def test_wajah_tidak_layak_tidak_diambil():
     small = FakeDetector([(200, 150, 40, 50)])
     with pytest.raises(enrollment.EnrollmentError, match="Mendekat ke kamera"):
         enrollment.collect(SequenceCam(_frames("budi")), small, FakeEmbedder(),
-                           QualitySettings(), samples=3, timeout=3, clock=StepClock(0.1))
+                           QualitySettings(), samples=3, timeout=3, clock=StepClock(0.1),
+                           start_delay=0)
 
 
 def test_tanpa_wajah_waktu_habis():
@@ -70,6 +72,16 @@ def test_tanpa_wajah_waktu_habis():
     with pytest.raises(enrollment.EnrollmentError, match="tidak ada wajah terdeteksi"):
         enrollment.collect(SequenceCam(_frames("budi")), FakeDetector([]), FakeEmbedder(),
                            QualitySettings(), samples=3, timeout=2, clock=StepClock(0.1))
+
+
+def test_hitung_mundur_wajah_operator_tidak_diambil():
+    """Regresi uji kantor 7 Okt: wajah operator yang baru menekan Enter ikut
+    terambil sebagai sampel. Selama hitung mundur tidak ada sampel diambil."""
+    frames = _frames("sari", 25) + _frames("budi", 60)   # operator 2,5 dtk, lalu karyawan
+    r = enrollment.collect(SequenceCam(frames), FakeDetector(), FakeEmbedder(),
+                           QualitySettings(), samples=5, clock=StepClock(0.1), start_delay=3.0)
+    sims = enrollment.check_consistency(r.embeddings)
+    assert min(sims) > 0.8   # semua sampel milik karyawan, bukan operator
 
 
 def test_sampel_diberi_jeda_waktu():
@@ -234,6 +246,17 @@ def test_cli_enroll_wajah_orang_lain_ditolak(app, biometric_keys, admin_user, bu
     assert bio.templates_for(sari) == []
 
 
+def test_cli_enroll_wajah_milik_karyawan_nonaktif_ditolak(app, biometric_keys, admin_user, budi, sari, fake_runtime):
+    """Regresi uji kantor 7 Okt: wajah Febian 0003 (nonaktif) didaftarkan lagi sebagai 0006."""
+    assert _enroll(app, "K001").exit_code == 0
+    budi.is_active = False
+    db.session.commit()
+    res = _enroll(app, "K002")  # kamera tiruan masih menampilkan Budi
+    assert res.exit_code != 0
+    assert "NONAKTIF" in res.output and "aktifkan" in res.output
+    assert bio.templates_for(sari) == []
+
+
 def test_cli_enroll_allow_similar_tercatat(app, biometric_keys, admin_user, budi, sari, fake_runtime):
     assert _enroll(app, "K001").exit_code == 0
     res = _enroll(app, "K002", "--allow-similar")
@@ -274,3 +297,30 @@ def test_cli_identify_tidak_mengenali_karyawan_nonaktif(app, biometric_keys, adm
     db.session.commit()
     res = app.test_cli_runner().invoke(args=["face-identify", "--no-preview", "--seconds", "1"])
     assert res.exit_code != 0 and "Belum ada wajah terdaftar" in res.output
+
+
+
+def test_cli_laporan_kemiripan_wajah(app, biometric_keys, admin_user, schedule):
+    """face-similarity-report menandai pasangan orang berbeda yang terlalu mirip."""
+    from recognition.embedder import MODEL_NAME
+
+    e = FakeEmbedder()
+    det = FakeDetector().detect(None)[0]
+    people = [("A1", "budi"), ("A2", "budi_kembar"), ("A3", "tamu")]
+    for code, person in people:
+        emp = Employee(employee_code=code, full_name=person, department="X",
+                       work_schedule_id=schedule.id)
+        db.session.add(emp)
+        db.session.commit()
+        bio.save_enrollment(emp, [e.embed(person_frame(person, i), det) for i in range(3)],
+                            MODEL_NAME, admin_user.id)
+
+    res = app.test_cli_runner().invoke(args=["face-similarity-report"])
+    assert res.exit_code == 0, res.output
+    first = res.output.split("paling mirip:")[1].strip().splitlines()[0]
+    assert "A1" in first and "A2" in first and "BAHAYA" in first
+    assert "BAHAYA: ada pasangan orang berbeda di atas ambang" in res.output
+
+
+def test_ambang_bawaan_hasil_kalibrasi(app):
+    assert app.config["FACE_MATCH_THRESHOLD"] == 0.60

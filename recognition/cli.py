@@ -223,10 +223,12 @@ def register_recognition_commands(app):
     @click.option("--allow-similar", is_flag=True,
                   help="Tetap simpan walau mirip karyawan lain (mis. kembar). Tercatat di audit.")
     @click.option("--timeout", default=60, show_default=True, help="Batas waktu pengambilan sampel (detik).")
+    @click.option("--delay", default=3.0, show_default=True,
+                  help="Hitung mundur sebelum sampel diambil (detik), agar operator sempat minggir.")
     @click.option("--preview/--no-preview", default=True, show_default=True)
     @friendly_db_errors
     def face_enroll(employee_code, admin_username, password, samples, replace_reason,
-                    allow_similar, timeout, preview):
+                    allow_similar, timeout, delay, preview):
         """Mendaftarkan wajah karyawan dari kamera (FR-03).
 
         Yang disimpan hanya embedding terenkripsi, bukan foto.
@@ -264,11 +266,18 @@ def register_recognition_commands(app):
             raise click.ClickException(str(exc))
 
         detector, embedder, quality = _load_models(app)
-        matcher = _build_matcher(app, embedder)
+        # Pencegahan pendaftaran ganda membandingkan dengan SEMUA wajah
+        # tersimpan, termasuk milik karyawan nonaktif.
+        from recognition.matcher import Matcher
+
+        all_templates, _ = biometric.load_all_templates(embedder.model_name)
+        matcher = Matcher(all_templates, threshold=app.config["FACE_MATCH_THRESHOLD"],
+                          margin=app.config["FACE_MATCH_MARGIN"])
 
         click.echo(f"Mendaftarkan wajah: {employee.employee_code} - {employee.full_name}")
         click.echo(
-            f"Berdiri sendirian sekitar 0,7-1 m di depan kamera. Akan diambil {samples} sampel; "
+            f"Pengambilan dimulai {delay:g} detik lagi. Operator minggir; orang yang didaftarkan "
+            f"berdiri sendirian 0,7-1 m di depan kamera. Akan diambil {samples} sampel; "
             "gerakkan kepala sedikit di antara sampel."
         )
         cam = _open_camera(app)
@@ -287,8 +296,8 @@ def register_recognition_commands(app):
 
         try:
             result = enrollment.collect(
-                cam, detector, embedder, quality, samples=samples, timeout=timeout,
-                on_frame=show if preview else None,
+                cam, detector, embedder, quality, samples=samples, timeout=timeout + delay,
+                on_frame=show if preview else None, start_delay=delay,
             )
             consistency = enrollment.check_consistency(result.embeddings)
         except (enrollment.EnrollmentError, webcam.CameraError) as exc:
@@ -306,6 +315,14 @@ def register_recognition_commands(app):
                 f"Wajah ini mirip dengan wajah terdaftar milik {other_label} "
                 f"(skor {conflict.score:.2f}, ambang {matcher.threshold})."
             )
+            if other is not None and not other.is_active and not allow_similar:
+                raise click.ClickException(
+                    message + f" Karyawan {other.employee_code} berstatus NONAKTIF; kemungkinan "
+                    "orang yang sama sedang didaftarkan dua kali. Jangan buat kode baru: aktifkan "
+                    f"kembali {other.employee_code} di halaman Karyawan, lalu jalankan "
+                    f"face-enroll --employee {other.employee_code} --replace \"alasan\" jika "
+                    "wajahnya perlu diperbarui."
+                )
             if not allow_similar:
                 raise click.ClickException(
                     message + " Pendaftaran dibatalkan. Periksa apakah orang yang didaftarkan "
@@ -434,3 +451,75 @@ def register_recognition_commands(app):
         click.echo(f"    Ambang saat ini          : {matcher.threshold}")
         click.echo(f"    Keaktifan terendah lolos : {dash(stats['min_live_passed'])} "
                    f"(ambang asli {live_settings.real_threshold})")
+
+    @app.cli.command("face-similarity-report")
+    @click.option("--top", default=10, show_default=True, help="Jumlah pasangan termirip yang ditampilkan.")
+    @friendly_db_errors
+    def face_similarity_report(top):
+        """Membandingkan semua wajah terdaftar satu sama lain (tanpa kamera).
+
+        Menunjukkan pasangan karyawan BERBEDA yang paling mirip, untuk
+        memeriksa apakah ambang kecocokan cukup aman (PRD 13.2).
+        """
+        import numpy as np
+
+        from recognition.embedder import MODEL_NAME
+
+        try:
+            templates, failed = biometric.load_active_templates(MODEL_NAME)
+        except biometric.BiometricKeyError as exc:
+            raise click.ClickException(str(exc))
+        people = {
+            e.id: (e.employee_code, e.full_name)
+            for e in db.session.execute(db.select(Employee)).scalars()
+        }
+        ids = np.array([emp for emp, _ in templates])
+        if len(set(ids.tolist())) < 2:
+            raise click.ClickException("Butuh minimal dua karyawan dengan wajah terdaftar.")
+
+        mat = np.stack([np.asarray(e, dtype=np.float32) for _, e in templates])
+        mat /= np.linalg.norm(mat, axis=1, keepdims=True)
+        sims = mat @ mat.T
+
+        unique = sorted(set(ids.tolist()))
+        pairs = []
+        for i, a in enumerate(unique):
+            for b in unique[i + 1:]:
+                block = sims[np.ix_(ids == a, ids == b)]
+                pairs.append((float(block.max()), a, b))
+        pairs.sort(reverse=True)
+
+        threshold = float(app.config["FACE_MATCH_THRESHOLD"])
+        same = [float(sims[np.ix_(ids == e, ids == e)][np.triu_indices((ids == e).sum(), 1)].min())
+                for e in unique if (ids == e).sum() > 1]
+
+        click.echo(f"{len(unique)} karyawan, {len(templates)} templat, ambang saat ini {threshold}.")
+        if failed:
+            click.secho(f"{failed} templat gagal diverifikasi dan dilewati.", fg="yellow")
+        click.echo("")
+        click.echo("Pasangan karyawan BERBEDA yang paling mirip:")
+        for score, a, b in pairs[:top]:
+            ca, na = people.get(a, ("?", "?"))
+            cb, nb = people.get(b, ("?", "?"))
+            if score >= threshold:
+                flag = "  <- BAHAYA: di atas ambang"
+            elif score >= threshold - 0.1:
+                flag = "  <- dekat ambang"
+            else:
+                flag = ""
+            click.echo(f"  {score:.3f}  {ca} {na}  <->  {cb} {nb}{flag}")
+
+        highest = pairs[0][0]
+        click.echo("")
+        click.echo(f"Kemiripan orang berbeda tertinggi : {highest:.3f}")
+        if same:
+            click.echo(f"Kemiripan sampel orang sama terendah: {min(same):.3f}")
+        click.echo(f"Jarak aman ambang terhadap orang berbeda: {threshold - highest:+.3f}")
+        if highest >= threshold:
+            click.secho("BAHAYA: ada pasangan orang berbeda di atas ambang. Naikkan "
+                        "FACE_MATCH_THRESHOLD atau daftarkan ulang wajah terkait.", fg="red")
+        elif threshold - highest < 0.1:
+            click.secho("Perhatian: jarak aman kurang dari 0,1. Pertimbangkan menaikkan ambang.",
+                        fg="yellow")
+        else:
+            click.secho("Ambang cukup aman untuk wajah yang terdaftar saat ini.", fg="green")

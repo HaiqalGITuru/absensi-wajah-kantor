@@ -23,9 +23,10 @@ UNKNOWN = "unknown"
 AMBIGUOUS = "ambiguous"
 NO_TEMPLATES = "no_templates"
 
-# Ambang awal dari kode contoh resmi OpenCV untuk SFace (kemiripan kosinus).
-# SEMENTARA: wajib dikalibrasi dengan data kantor (PRD 13.2).
-DEFAULT_THRESHOLD = 0.363
+# Ambang hasil kalibrasi uji kantor 7 Okt 2026 (lihat config.py dan
+# docs/MODEL_DECISION.md). Nilai contoh OpenCV (0.363) terlalu rendah untuk
+# karyawan di lokasi ini.
+DEFAULT_THRESHOLD = 0.60
 DEFAULT_MARGIN = 0.05
 
 

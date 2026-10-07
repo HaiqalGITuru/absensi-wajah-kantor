@@ -392,13 +392,30 @@ def load_active_templates(model_name):
     Mengembalikan (daftar (employee_id, embedding), jumlah_gagal). Templat yang
     gagal diverifikasi dilewati dan hanya dicatat jumlahnya, tanpa isi datanya.
     """
+    return _load_templates(model_name, include_inactive=False)
+
+
+def load_all_templates(model_name):
+    """Templat SEMUA karyawan, termasuk nonaktif.
+
+    Dipakai HANYA untuk mencegah pendaftaran ganda: wajah yang sudah tersimpan
+    atas nama karyawan nonaktif tidak boleh didaftarkan ulang dengan kode baru.
+    Tidak pernah dipakai untuk mencatat absensi.
+    """
+    return _load_templates(model_name, include_inactive=True)
+
+
+def _load_templates(model_name, include_inactive):
     keyring = load_keyring()
-    rows = db.session.execute(
+    stmt = (
         db.select(FaceTemplate)
         .join(Employee, Employee.id == FaceTemplate.employee_id)
-        .where(Employee.is_active.is_(True), FaceTemplate.model_name == model_name)
+        .where(FaceTemplate.model_name == model_name)
         .order_by(FaceTemplate.employee_id, FaceTemplate.id)
-    ).scalars().all()
+    )
+    if not include_inactive:
+        stmt = stmt.where(Employee.is_active.is_(True))
+    rows = db.session.execute(stmt).scalars().all()
 
     result, failed = [], 0
     for template in rows:
