@@ -18,6 +18,9 @@ Pemeriksaan kamera:
     flask --app app camera-scan           (mencari webcam yang terpasang)
     flask --app app camera-check          (uji stabilitas dan pencahayaan)
 
+Uji performa (database sementara, data asli tidak disentuh):
+    flask --app app perf-check
+
 Layanan kamera kios (MENCATAT ABSENSI), jalankan di terminal terpisah:
     flask --app app kiosk-run
 
@@ -46,6 +49,7 @@ from routes.kiosk import bp as kiosk_bp
 from routes.attendance import bp as attendance_bp
 from routes.reports import bp as reports_bp
 from kiosk.cli import register_kiosk_commands
+from perf.cli import register_perf_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
 from services.cli_errors import friendly_db_errors
@@ -407,9 +411,13 @@ def register_attendance_commands(app):
             click.echo(f"  Pulang cepat: {'ya' if decision.left_early else 'tidak'}")
 
 
-def create_app(config_name=None):
+def create_app(config_name=None, overrides=None):
+    """Membuat aplikasi. `overrides` (opsional) menimpa konfigurasi SEBELUM
+    database disambungkan; dipakai uji performa agar memakai database sementara."""
     app = Flask(__name__)
     app.config.from_object(get_config(config_name))
+    if overrides:
+        app.config.update(overrides)
 
     if not app.config.get("SECRET_KEY"):
         raise RuntimeError(
@@ -432,6 +440,7 @@ def create_app(config_name=None):
     register_recognition_commands(app)
     register_attendance_commands(app)
     register_kiosk_commands(app)
+    register_perf_commands(app)
 
     @app.after_request
     def security_headers(response):
