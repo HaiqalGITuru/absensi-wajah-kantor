@@ -169,3 +169,33 @@ def register_maintenance_commands(app):
                                     f"(dibuat {manifest['created_at']}); {ok} templat wajah terbaca.")
         click.secho("Pemulihan selesai. Jalankan biometric-status untuk memastikan semuanya terbaca.",
                     fg="green")
+
+
+def register_security_commands(app):
+    @app.cli.command("security-check")
+    def security_check():
+        """Daftar periksa keamanan sebelum sistem dipakai resmi."""
+        import os
+
+        from maintenance import security_check as sc
+
+        env = {k: os.getenv(k, "") for k in ("APP_ENV", "DB_USER", "DB_PASSWORD")}
+        colors = {sc.OK: "green", sc.NEED: "red", sc.INFO: "yellow"}
+        need = 0
+        for group, items in sc.run_all(app, env):
+            click.echo("")
+            click.secho(group, bold=True)
+            for it in items:
+                need += it.status == sc.NEED
+                click.echo("  " + click.style(f"[{it.status:<5}]", fg=colors[it.status]) + f" {it.title}")
+                if it.detail:
+                    click.echo(f"           {it.detail}")
+        click.echo("")
+        click.secho("Periksa manual (tidak bisa diperiksa otomatis):", bold=True)
+        for line in sc.MANUAL:
+            click.echo(f"  [ ] {line}")
+        click.echo("")
+        if need:
+            click.secho(f"{need} butir PERLU dibereskan sebelum sistem dipakai resmi.", fg="red")
+            raise SystemExit(1)
+        click.secho("Semua pemeriksaan otomatis lulus. Selesaikan juga daftar periksa manual.", fg="green")

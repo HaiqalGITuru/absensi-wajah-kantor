@@ -55,7 +55,7 @@ from routes.attendance import bp as attendance_bp
 from routes.reports import bp as reports_bp
 from kiosk.cli import register_kiosk_commands
 from perf.cli import register_perf_commands
-from maintenance.cli import register_maintenance_commands
+from maintenance.cli import register_maintenance_commands, register_security_commands
 from services import audit_service as audit
 from services import biometric_service as biometric
 from services.cli_errors import friendly_db_errors
@@ -448,6 +448,7 @@ def create_app(config_name=None, overrides=None):
     register_kiosk_commands(app)
     register_perf_commands(app)
     register_maintenance_commands(app)
+    register_security_commands(app)
 
     @app.after_request
     def security_headers(response):
