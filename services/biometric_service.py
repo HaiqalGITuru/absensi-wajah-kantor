@@ -284,8 +284,11 @@ def save_template(employee, embedding, model_name, actor_id):
     return template
 
 
-def save_enrollment(employee, embeddings, model_name, actor_id, replace_reason=None):
+def save_enrollment(employee, embeddings, model_name, actor_id, replace_reason=None, note=None):
     """Menyimpan beberapa sampel wajah sekaligus dalam SATU transaksi (FR-03).
+
+    note (opsional) ditambahkan ke catatan audit, mis. asal permintaan dari
+    panel admin lewat API ketika disimpan oleh layanan kamera kios.
 
     Jika replace_reason diisi, templat lama dicabut di transaksi yang sama,
     sehingga tidak pernah ada keadaan setengah jadi (lama sudah hilang tetapi
@@ -325,6 +328,7 @@ def save_enrollment(employee, embeddings, model_name, actor_id, replace_reason=N
                 description=(
                     f"{len(existing)} templat wajah {employee.employee_code} diganti "
                     f"melalui pendaftaran ulang. Alasan: {replace_reason}"
+                    + (f" {note}" if note else "")
                 ),
                 commit=False,
             )
@@ -347,6 +351,7 @@ def save_enrollment(employee, embeddings, model_name, actor_id, replace_reason=N
             description=(
                 f"{len(saved)} templat wajah didaftarkan untuk {employee.employee_code} "
                 f"(model {model_name}, kunci v{keyring[0]})"
+                + (f" {note}" if note else "")
             ),
             commit=False,
         )

@@ -102,6 +102,9 @@ class Config:
     BACKUP_DIR = os.getenv("BACKUP_DIR", str(BASE_DIR / "backups"))
     BACKUP_KEEP = int(os.getenv("BACKUP_KEEP", "30"))
 
+    # API baca-saja: batas permintaan per token per menit.
+    API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "120"))
+
     # Anti-foto (Tahap 4D). Mode: off | passive | challenge | passive+challenge.
     # Ambang masih SEMENTARA dan perlu dikalibrasi di lokasi (PRD 13.2).
     LIVENESS_MODE = os.getenv("LIVENESS_MODE", "passive+challenge")

@@ -12,8 +12,15 @@ ADMIN_PASSWORD = "PasswordUji12345"
 
 
 @pytest.fixture
-def app():
+def app(tmp_path):
     app = create_app("testing")
+    # Tes tidak boleh membaca/menulis file layanan yang sedang berjalan di
+    # komputer ini (status kios, kunci kios, folder backup asli).
+    app.config.update(
+        KIOSK_STATE_FILE=str(tmp_path / "kiosk_state.json"),
+        KIOSK_LOCK_FILE=str(tmp_path / "kiosk.lock"),
+        BACKUP_DIR=str(tmp_path / "backups"),
+    )
     with app.app_context():
         db.create_all()
         yield app

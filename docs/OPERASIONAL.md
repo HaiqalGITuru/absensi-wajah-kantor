@@ -31,6 +31,14 @@
 
 ## Karyawan baru
 
+**Lewat panel Laravel (jika dipakai):** Karyawan → Tambah, centang *Daftarkan
+wajah di kamera kios setelah disimpan*, lalu karyawan berdiri di depan kios.
+Layar kios menampilkan nama depannya; halaman Laravel menampilkan kemajuan
+sampai *Wajah berhasil didaftarkan*. Layanan kamera kios harus berjalan.
+Langkah di bawah ini (terminal) tetap bisa dipakai.
+
+**Lewat admin sistem absensi dan terminal:**
+
 1. Menu **Karyawan** → **Tambah karyawan** (kode = NIP). Jika muncul
    peringatan *nama sudah dipakai*, periksa apakah orangnya sama: jika sama,
    **aktifkan data lama**, jangan membuat data baru.

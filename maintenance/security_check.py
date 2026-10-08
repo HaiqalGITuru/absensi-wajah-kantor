@@ -218,8 +218,32 @@ def check_data():
                           f"{no_face} karyawan aktif belum punya wajah terdaftar."))
     else:
         items.append(Item(OK, "Wajah karyawan aktif terdaftar"))
+    items.extend(check_api_tokens())
     db.session.rollback()
     return items
+
+
+def check_api_tokens(now=None):
+    from datetime import timedelta
+
+    from models import ApiToken, office_now
+
+    now = now or office_now()
+    rows = db.session.execute(db.select(ApiToken)).scalars().all()
+    active = [r for r in rows if r.is_usable(now)]
+    if not active:
+        return [Item(OK, "Token API", "Tidak ada token aktif.")]
+    soon = [r for r in active if r.expires_at and r.expires_at - now < timedelta(days=14)]
+    detail = f"{len(active)} token aktif: " + ", ".join(
+        f"{r.name} ({r.prefix}…, {r.scope})" for r in active) + "."
+    writers = [r for r in active if r.scope == "write"]
+    if writers:
+        detail += (f" {len(writers)} token WRITE bisa mengubah karyawan/jadwal; pastikan masih "
+                   "diperlukan dan disimpan seaman password admin.")
+    if soon:
+        detail += " Segera kedaluwarsa: " + ", ".join(r.name for r in soon) + "."
+    detail += " Cabut token yang tidak dipakai lagi (api-token-revoke)."
+    return [Item(INFO, "Token API", detail)]
 
 
 def run_all(app, env):

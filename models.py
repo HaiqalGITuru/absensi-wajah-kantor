@@ -252,3 +252,66 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f"<AuditLog {self.action}>"
+
+
+class ApiToken(TimestampMixin, db.Model):
+    """Token akses API baca-saja (fitur API).
+
+    Token asli hanya ditampilkan SEKALI saat dibuat; yang disimpan hanya
+    SHA-256-nya, sehingga isi database yang bocor tidak bisa dipakai untuk
+    mengakses API.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    prefix = db.Column(db.String(12), nullable=False)
+    # "read" = hanya baca; "write" = baca + ubah karyawan/jadwal + audit log.
+    scope = db.Column(db.String(10), nullable=False, default="read", server_default="read")
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    revoke_reason = db.Column(db.String(255), nullable=True)
+
+    created_by = db.relationship("User")
+
+    def is_usable(self, now):
+        return self.revoked_at is None and (self.expires_at is None or now < self.expires_at)
+
+    def allows(self, scope):
+        return scope == "read" or self.scope == "write"
+
+    def __repr__(self):
+        return f"<ApiToken {self.prefix}… {self.name}>"
+
+
+class FaceEnrollmentRequest(TimestampMixin, db.Model):
+    """Antrean pendaftaran wajah yang diminta dari panel admin lain (lewat API).
+
+    Layanan kamera kios mengambil permintaan, mendaftarkan wajah memakai kamera
+    kios (C270), lalu mencatat hasilnya. Foto tidak pernah meninggalkan
+    komputer kios; yang disimpan tetap hanya templat terenkripsi.
+    """
+
+    __tablename__ = "face_enrollment_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False, index=True)
+    # pending -> running -> done | failed | cancelled ; pending -> expired
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    replace_reason = db.Column(db.String(255), nullable=True)
+    requested_via = db.Column(db.String(255), nullable=True)
+    samples_taken = db.Column(db.Integer, nullable=False, default=0)
+    samples_total = db.Column(db.Integer, nullable=False, default=5)
+    message = db.Column(db.String(255), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+    employee = db.relationship("Employee")
+
+    def __repr__(self):
+        return f"<FaceEnrollmentRequest {self.id} emp={self.employee_id} {self.status}>"

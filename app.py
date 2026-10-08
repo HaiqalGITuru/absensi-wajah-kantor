@@ -53,6 +53,8 @@ from routes.schedules import bp as schedules_bp
 from routes.kiosk import bp as kiosk_bp
 from routes.attendance import bp as attendance_bp
 from routes.reports import bp as reports_bp
+from routes.api import bp as api_bp, register_api_error_handlers
+from maintenance.api_cli import register_api_commands
 from kiosk.cli import register_kiosk_commands
 from perf.cli import register_perf_commands
 from maintenance.cli import register_maintenance_commands, register_security_commands
@@ -442,6 +444,10 @@ def create_app(config_name=None, overrides=None):
     app.register_blueprint(kiosk_bp)
     app.register_blueprint(attendance_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(api_bp)
+    # API hanya-baca dengan token Bearer, bukan sesi cookie: CSRF tidak berlaku.
+    csrf.exempt(api_bp)
+    register_api_error_handlers(app)
     register_commands(app)
     register_recognition_commands(app)
     register_attendance_commands(app)
@@ -449,6 +455,7 @@ def create_app(config_name=None, overrides=None):
     register_perf_commands(app)
     register_maintenance_commands(app)
     register_security_commands(app)
+    register_api_commands(app)
 
     @app.after_request
     def security_headers(response):

@@ -93,6 +93,8 @@ def register_kiosk_commands(app):
                 on_frame=show if preview else None,
                 liveness=liveness,
                 liveness_settings=live_settings,
+                match_threshold=app.config["FACE_MATCH_THRESHOLD"],
+                match_margin=app.config["FACE_MATCH_MARGIN"],
             )
 
             stop = {"flag": False}

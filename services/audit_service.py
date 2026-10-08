@@ -4,7 +4,7 @@ Layanan audit log (FR-14).
 Aturan penting: JANGAN pernah mengirim password, kunci enkripsi, atau data
 biometrik ke fungsi log_event.
 """
-from flask import current_app, has_request_context, request
+from flask import current_app, g, has_request_context, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from extensions import db
@@ -29,6 +29,9 @@ SCHEDULE_ACTIVATED = "schedule_activated"
 FACE_TEMPLATE_CREATED = "face_template_created"
 FACE_TEMPLATE_REVOKED = "face_template_revoked"
 FACE_ENROLL_SIMILAR_OVERRIDE = "face_enroll_similar_override"
+FACE_ENROLL_REQUESTED = "face_enroll_requested"
+FACE_ENROLL_FAILED = "face_enroll_failed"
+FACE_ENROLL_CANCELLED = "face_enroll_cancelled"
 
 ATTENDANCE_CORRECTED = "attendance_corrected"
 ATTENDANCE_CANCELLED = "attendance_cancelled"
@@ -39,6 +42,9 @@ REPORT_EXPORTED = "report_exported"
 
 BACKUP_CREATED = "backup_created"
 BACKUP_RESTORED = "backup_restored"
+
+API_TOKEN_CREATED = "api_token_created"
+API_TOKEN_REVOKED = "api_token_revoked"
 BIOMETRIC_KEY_CREATED = "biometric_key_created"
 BIOMETRIC_KEY_ROTATED = "biometric_key_rotated"
 
@@ -79,6 +85,10 @@ def log_event(
     if has_request_context() and request.remote_addr:
         ip_note = f"[IP {request.remote_addr}]"
         description = f"{description} {ip_note}" if description else ip_note
+    # Perubahan lewat API: catat token dan pelaku yang dilaporkan aplikasi (mis. Laravel).
+    via = getattr(g, "audit_via", None) if has_request_context() else None
+    if via:
+        description = f"{description} {via}" if description else via
 
     entry = AuditLog(
         action=action,

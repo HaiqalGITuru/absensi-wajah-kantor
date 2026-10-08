@@ -15,6 +15,7 @@ mencatat jam masuk/pulang sesuai jadwal kerja.
 - Admin: dashboard kehadiran, karyawan, jadwal per hari, koreksi dan
   pembatalan beraudit, laporan dan ekspor CSV.
 - Operasional: backup/pemulihan teruji, uji performa, daftar periksa keamanan.
+- API JSON baca-saja bertoken untuk aplikasi lain (tanpa data wajah).
 
 ## Teknologi
 
@@ -29,6 +30,7 @@ pemilihan dan lisensi: [docs/MODEL_DECISION.md](docs/MODEL_DECISION.md).
 | [docs/INSTALASI.md](docs/INSTALASI.md) | Memasang sistem di komputer kios |
 | [docs/OPERASIONAL.md](docs/OPERASIONAL.md) | Rutinitas admin, karyawan baru, koreksi, penanganan gangguan |
 | [docs/KEAMANAN.md](docs/KEAMANAN.md) | Daftar periksa sebelum dipakai resmi, penanganan insiden |
+| [docs/API.md](docs/API.md) | API baca-saja untuk aplikasi lain: token, endpoint, contoh |
 | [docs/BACKUP.md](docs/BACKUP.md) | Backup harian, uji pemulihan, pemulihan bencana, pengosongan data uji |
 | [docs/MODEL_DECISION.md](docs/MODEL_DECISION.md) | Pemilihan model, lisensi, kalibrasi ambang dan anti-foto |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Hasil uji performa |

@@ -19,12 +19,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from camera.webcam import CameraError
 from extensions import db
 from kiosk import state as ks
+from recognition import enrollment
 from recognition.identify import process_frame
 from recognition.liveness import REASON_TEXT, LivenessGate, LivenessSettings
-from recognition.matcher import AMBIGUOUS, UNKNOWN
+from recognition.matcher import AMBIGUOUS, UNKNOWN, Matcher
+from services import ValidationError
 from services import attendance_service as att
 from services import audit_service as audit
 from services import biometric_service as biometric
+from services import face_enrollment_service as fe
 from tracking.face_tracker import FaceTracker
 
 log = logging.getLogger("kiosk")
@@ -45,19 +48,26 @@ LIVENESS_REJECT_MESSAGE = (
 )
 AMBIGUOUS_MESSAGE = "Identitas belum dapat dipastikan. Silakan coba lagi."
 
+ENROLL_POLL_SECONDS = 1.5      # seberapa sering antrean pendaftaran diperiksa
+ENROLL_TIMEOUT_SECONDS = 60.0  # batas waktu pengambilan sampel
+ENROLL_PROGRESS_SECONDS = 1.0  # seberapa sering kemajuan ditulis ke database
+
 
 class KioskWorker:
     def __init__(self, app, camera, detector, embedder, quality, matcher_factory,
                  tracker_settings, attendance_settings, state_store,
                  template_reload_seconds=60.0, reopen_seconds=5.0,
                  clock=time.monotonic, wall_clock=time.time, on_frame=None,
-                 liveness=None, liveness_settings=None):
+                 liveness=None, liveness_settings=None, match_threshold=0.6, match_margin=0.05,
+                 enroll_poll_seconds=ENROLL_POLL_SECONDS, enroll_timeout=ENROLL_TIMEOUT_SECONDS,
+                 enroll_start_delay=enrollment.START_DELAY):
         self.app = app
         self.camera = camera
         self.detector = detector
         self.embedder = embedder
         self.quality = quality
         self.matcher_factory = matcher_factory
+        self.tracker_settings = tracker_settings
         self.tracker = FaceTracker(tracker_settings)
         self.attendance_settings = attendance_settings
         self.state = state_store
@@ -85,6 +95,14 @@ class KioskWorker:
         self.publish_skipped = 0
         self.unexpected_errors = 0
         self.decisions = []  # riwayat singkat untuk pengujian dan log
+        # Pendaftaran wajah yang diminta dari panel admin lewat API.
+        self.match_threshold = match_threshold
+        self.match_margin = match_margin
+        self.enroll_poll_seconds = enroll_poll_seconds
+        self.enroll_timeout = enroll_timeout
+        self.enroll_start_delay = enroll_start_delay
+        self._last_enroll_poll = -1e9
+        self.enrollments = []  # (id permintaan, status akhir) untuk pengujian dan log
 
     # ------------------------------------------------------------ pembantu
 
@@ -205,6 +223,133 @@ class KioskWorker:
                 self.hint = track.last_reason
         return tracks
 
+    # ------------------------------------------------------------ pendaftaran wajah
+
+    def check_enrollment(self):
+        """Mengambil permintaan pendaftaran dari antrean (jika ada) lalu
+        menjalankannya. Mengembalikan True jika satu pendaftaran dijalankan."""
+        now = self.clock()
+        if now - self._last_enroll_poll < self.enroll_poll_seconds:
+            return False
+        self._last_enroll_poll = now
+        try:
+            req = fe.claim_next()
+        except SQLAlchemyError:
+            db.session.rollback()
+            return False
+        if req is None:
+            self._end_read_transaction()
+            return False
+        self.run_enrollment(req)
+        return True
+
+    def run_enrollment(self, req):
+        employee = req.employee
+        first = (employee.full_name or "").split()[0] if employee.full_name else "karyawan"
+        label = f"{first} (kode ...{employee.employee_code[-4:]})"
+        via = req.requested_via or ""
+        live_scores = []
+        cancelled = [False]
+        last_progress = [-1e9]
+        log.info("Pendaftaran wajah dimulai: permintaan #%s karyawan id=%s", req.id, employee.id)
+
+        def on_frame(frame, status):
+            self.camera_status = ks.CAMERA_OK
+            faces = status["faces"]
+            if self.liveness is not None and self.liveness_settings.passive and len(faces) == 1:
+                det, quality = faces[0]
+                if quality.ok:
+                    live_scores.append(self.liveness.score(frame, det))
+            self._say("info", f"Pendaftaran wajah: {label}. {status['message']}")
+            self.hint = f"Sampel {status['taken']}/{status['samples']}"
+            self.publish()
+            now = self.clock()
+            if now - last_progress[0] >= ENROLL_PROGRESS_SECONDS or status["taken"] == status["samples"]:
+                last_progress[0] = now
+                fe.update_progress(req, status["taken"], status["samples"], status["message"])
+                if fe.is_cancelled(req):
+                    cancelled[0] = True
+                    return False
+            return True
+
+        outcome, message = "failed", ""
+        try:
+            result = enrollment.collect(
+                self.camera, self.detector, self.embedder, self.quality,
+                samples=req.samples_total, timeout=self.enroll_timeout, on_frame=on_frame,
+                clock=self.clock, start_delay=self.enroll_start_delay,
+            )
+            enrollment.check_consistency(result.embeddings)
+
+            # Anti-foto: pendaftaran dari jarak jauh tidak boleh memakai foto/layar.
+            s = self.liveness_settings
+            if self.liveness is not None and s.passive:
+                mean = sum(live_scores) / len(live_scores) if live_scores else 0.0
+                if len(live_scores) < s.min_samples or mean < s.real_threshold:
+                    raise enrollment.EnrollmentError(
+                        "Wajah tidak dapat dipastikan sebagai orang asli (bukan foto atau layar). "
+                        "Ulangi dengan cahaya cukup dan tanpa kacamata gelap.")
+
+            all_templates, _ = biometric.load_all_templates(self.embedder.model_name)
+            matcher = Matcher(all_templates, threshold=self.match_threshold, margin=self.match_margin)
+            conflict = enrollment.find_conflict(result.embeddings, matcher, employee.id)
+            if conflict is not None:
+                from models import Employee
+
+                other = db.session.get(Employee, conflict.employee_id)
+                who = f"{other.employee_code} - {other.full_name}" if other else "karyawan lain"
+                raise enrollment.EnrollmentError(
+                    f"Wajah ini mirip wajah {who} yang sudah terdaftar (skor {conflict.score:.2f}). "
+                    "Tidak disimpan. Jika memang orang berbeda, daftarkan lewat terminal kios "
+                    "(face-enroll --allow-similar).")
+
+            saved = biometric.save_enrollment(
+                employee, result.embeddings, self.embedder.model_name, None,
+                replace_reason=req.replace_reason,
+                note=f"[permintaan #{req.id} dari panel admin: {via.strip('[] ') or '-'}]",
+            )
+            outcome, message = "done", f"{len(saved)} sampel wajah tersimpan terenkripsi."
+            self._say("success", f"Wajah {first} berhasil didaftarkan.")
+        except enrollment.EnrollmentError as exc:
+            db.session.rollback()
+            if cancelled[0]:
+                outcome, message = "cancelled", "Dibatalkan dari panel admin."
+            else:
+                message = str(exc)
+        except CameraError as exc:
+            db.session.rollback()
+            message = f"Kamera bermasalah: {exc}"
+        except ValidationError as exc:
+            db.session.rollback()
+            message = " ".join(exc.errors.values())
+        except Exception:
+            db.session.rollback()
+            log.exception("Galat tak terduga saat pendaftaran wajah #%s", req.id)
+            message = "Galat tak terduga di layanan kamera. Lihat log kios."
+        finally:
+            try:
+                fe.finish(req, outcome, message)
+                if outcome != "done":
+                    action = audit.FACE_ENROLL_CANCELLED if outcome == "cancelled" else audit.FACE_ENROLL_FAILED
+                    audit.log_event(
+                        action, entity_type="employee", entity_id=employee.id,
+                        description=(f"Pendaftaran wajah {employee.employee_code} (permintaan #{req.id}) "
+                                     f"{'dibatalkan' if outcome == 'cancelled' else 'gagal'}: {message} {via}").strip(),
+                    )
+            except SQLAlchemyError:
+                db.session.rollback()
+                log.error("Hasil pendaftaran #%s tidak dapat dicatat.", req.id)
+            if outcome != "done":
+                self._say("warning", "Pendaftaran wajah tidak berhasil. " + message)
+            self.enrollments.append((req.id, outcome))
+            log.info("Pendaftaran wajah #%s selesai: %s", req.id, outcome)
+            # Kembali ke mode absensi dengan pelacak bersih dan daftar wajah terbaru.
+            self.tracker = FaceTracker(self.tracker_settings)
+            self.gate = LivenessGate(self.liveness_settings)
+            self.hint = None
+            self.reload_templates(force=True)
+            self.publish(force=True)
+
     # ------------------------------------------------------------ kamera
 
     def read_frame(self):
@@ -234,6 +379,8 @@ class KioskWorker:
 
     def run_once(self):
         self.reload_templates()
+        if self.check_enrollment():
+            return True
         frame = self.read_frame()
         tracks = self.step(frame) if frame is not None else []
         self.publish()

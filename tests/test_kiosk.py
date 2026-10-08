@@ -439,3 +439,11 @@ def test_database_terputus_saat_muat_ulang_tetap_pakai_daftar_lama(app, tmp_path
     worker.reload_templates(force=True)
     assert worker.matcher is old
     assert "Database tidak dapat dihubungi" in worker.detail
+
+
+def test_tes_tidak_memakai_file_status_kios_asli(app, tmp_path):
+    """Kios yang sedang menyala di komputer ini tidak boleh memengaruhi tes."""
+    from pathlib import Path
+
+    for key in ("KIOSK_STATE_FILE", "KIOSK_LOCK_FILE", "BACKUP_DIR"):
+        assert Path(app.config[key]).is_relative_to(tmp_path), key
